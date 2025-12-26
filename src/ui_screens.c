@@ -1,6 +1,7 @@
 #include "ui_screens.h"
 #include "version.h"
 #include "news_api.h"
+#include "ntp_client.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -36,6 +37,8 @@ static lv_obj_t *sps_tx_textarea = NULL;  // For entering data to send via SPS
 static lv_obj_t *news_list = NULL;        // For displaying news articles
 static lv_obj_t *news_status_label = NULL; // For news loading status
 static lv_timer_t *news_update_timer = NULL; // Timer for updating news display
+static lv_obj_t *time_label = NULL;       // For displaying current time
+static lv_timer_t *time_update_timer = NULL; // Timer for updating time display
 
 // Initialize UI system
 void ui_init(ui_context_t *ctx) {
@@ -45,10 +48,29 @@ void ui_init(ui_context_t *ctx) {
 }
 
 // Transition to a new state
-void transition_to_state(ui_context_t *ctx, app_state_t new_state) 
+void transition_to_state(ui_context_t *ctx, app_state_t new_state)
 {
+    // Clean up timers and global widget references from previous screen
+    if (time_update_timer != NULL) {
+        lv_timer_del(time_update_timer);
+        time_update_timer = NULL;
+    }
+    if (news_update_timer != NULL) {
+        lv_timer_del(news_update_timer);
+        news_update_timer = NULL;
+    }
+
+    // Clear global widget references
+    password_ta = NULL;
+    status_label = NULL;
+    sps_rx_textarea = NULL;
+    sps_tx_textarea = NULL;
+    news_list = NULL;
+    news_status_label = NULL;
+    time_label = NULL;
+
     // Delete old screen
-    if (ctx->current_screen != NULL) 
+    if (ctx->current_screen != NULL)
     {
         lv_obj_del(ctx->current_screen);
         ctx->current_screen = NULL;
@@ -393,6 +415,24 @@ lv_obj_t* create_error_screen(ui_context_t *ctx)
     return screen;
 }
 
+// Timer callback to update time display
+static void time_update_timer_cb(lv_timer_t *timer)
+{
+    if (time_label == NULL) {
+        return;
+    }
+
+    struct tm timeinfo;
+    if (ntp_client_get_time(&timeinfo)) {
+        char time_str[16];
+        snprintf(time_str, sizeof(time_str), "%02d:%02d:%02d",
+                 timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+        lv_label_set_text(time_label, time_str);
+    } else {
+        lv_label_set_text(time_label, "--:--:--");
+    }
+}
+
 // Create main app screen (original UI with settings button added)
 lv_obj_t* create_main_app_screen(ui_context_t *ctx) 
 {
@@ -452,6 +492,17 @@ lv_obj_t* create_main_app_screen(ui_context_t *ctx)
     lv_obj_t *news_label = lv_label_create(news_btn);
     lv_label_set_text(news_label, "News Feed");
     lv_obj_center(news_label);
+
+    // Time display in bottom-right corner
+    time_label = lv_label_create(screen);
+    lv_label_set_text(time_label, "--:--:--");
+    lv_obj_align(time_label, LV_ALIGN_BOTTOM_RIGHT, -5, -5);
+
+    // Start time update timer (update every 1 second)
+    if (time_update_timer != NULL) {
+        lv_timer_del(time_update_timer);
+    }
+    time_update_timer = lv_timer_create(time_update_timer_cb, 1000, NULL);
 
     return screen;
 }

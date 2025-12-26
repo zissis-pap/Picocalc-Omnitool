@@ -17,6 +17,7 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 - **Network Scanning**: Automatic WiFi network discovery and listing with rescan support
 - **Smart Configuration**: Persistent WiFi credentials stored in flash memory with CRC32 validation
 - **Auto-Connect**: Automatic reconnection to saved networks on boot
+- **NTP Time Sync**: Automatic network time synchronization on successful WiFi connection
 - **Security Support**: WPA/WPA2/WPA2-Mixed authentication modes
 - **Network Management**: Easy reconfiguration through settings UI
 - **Signal Strength**: Networks sorted by RSSI for optimal connection
@@ -35,6 +36,7 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 ### User Interface
 - **Application Menu**: Main screen with list of available applications
 - **News Feed**: Real-time news headlines via NewsAPI integration
+- **Real-Time Clock**: UTC time display in bottom-right corner (auto-synced via NTP)
 - **WiFi Setup Flow**: Guided network selection and password entry
 - **BLE Scan Screen**: Dynamic device discovery with real-time updates
 - **SPS Data Screen**: Send/receive interface for Serial Port Service communication
@@ -47,6 +49,8 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 - **DMA-Accelerated Graphics**: Hardware DMA for SPI transfers (10-15x faster screen updates)
 - **Optimized Rendering**: 160-row buffer reduces screen updates from 32 to 2 chunks
 - **High-Speed SPI**: 50 MHz SPI interface for maximum throughput
+- **NTP Time Sync**: Software-based time tracking using Pico's microsecond timer
+- **HTTP/UDP Networking**: NewsAPI client (TCP/HTTP) and NTP client (UDP) via lwIP
 - **Flash Persistence**: CRC32-validated configuration storage in flash
 - **State Machine**: Robust application state management
 - **Duplicate Removal**: Intelligent WiFi scan result deduplication
@@ -63,6 +67,7 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 │   ├── wifi_config.c                # WiFi management and flash persistence
 │   ├── ble_config.c                 # BLE connectivity and SPS support
 │   ├── news_api.c                   # NewsAPI HTTP client for fetching headlines
+│   ├── ntp_client.c                 # NTP client for time synchronization
 │   ├── lv_port_disp_picocalc_ILI9488.c  # DMA-accelerated display driver for ILI9488
 │   └── lv_port_indev_picocalc_kb.c  # I2C keyboard input driver
 ├── include/                         # Header files
@@ -70,6 +75,7 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 │   ├── wifi_config.h
 │   ├── ble_config.h
 │   ├── news_api.h
+│   ├── ntp_client.h
 │   ├── lv_port_disp_picocalc_ILI9488.h
 │   └── lv_port_indev_picocalc_kb.h
 ├── lcdspi/                          # LCD SPI communication library (DMA support)
@@ -190,23 +196,44 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
   - Configurable country and API key support
   - Error handling with user-friendly messages
 
+- **NTP Time Synchronization**: Automatic time sync on WiFi connection
+  - NTP client fetches time from pool.ntp.org on successful WiFi connection
+  - Software-based time tracking using Pico's microsecond timer
+  - Real-time clock display in bottom-right corner of main screen (HH:MM:SS format)
+  - Updates every second with UTC time
+  - Persists across screen changes (resyncs on WiFi reconnect)
+
 #### UI Changes
 - **Main Screen Redesign**: Replaced text input/output with application launcher
   - "Applications:" section with list of available apps
   - News Feed button as first application
   - Cleaner, more organized interface
   - WiFi and BLE buttons remain in top-right corner
+  - Real-time clock display in bottom-right corner
 
 #### Technical Additions
 - **NewsAPI Client** (`news_api.c/h`):
-  - Non-blocking HTTP requests via lwIP
+  - Non-blocking HTTP requests via lwIP TCP/IP stack
   - DNS resolution with fallback
   - TCP client implementation
-  - JSON response parsing
+  - Simple JSON parser for NewsAPI responses
   - State machine for fetch status
   - Support for up to 10 news articles
+- **NTP Client** (`ntp_client.c/h`):
+  - NTP protocol implementation using UDP
+  - Software time tracking with `time_us_64()` microsecond timer
+  - Automatic sync on WiFi connection (both auto-connect and manual)
+  - State machine for sync status (IDLE, REQUESTING, SYNCED, ERROR)
+  - Time API with `struct tm` and Unix timestamp support
 - **Enhanced State Machine**: Added `APP_STATE_NEWS_FEED` state
-- **LVGL Timer Integration**: Automatic UI updates when news data arrives
+- **LVGL Timer Integration**: Automatic UI updates for news and time display
+- **Improved Resource Management**: Centralized cleanup of timers and widget references in `transition_to_state()`
+
+#### Bug Fixes
+- **Fixed News Feed unresponsiveness**: Resolved issue where app would hang when pressing Back button
+  - Added proper timer cleanup during state transitions
+  - Cleared global widget references to prevent dangling pointers
+  - Applied fix to all screen transitions for improved stability
 
 ---
 

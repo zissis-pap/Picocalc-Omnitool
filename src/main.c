@@ -19,6 +19,7 @@
 #include "wifi_config.h"
 #include "ble_config.h"
 #include "ui_screens.h"
+#include "ntp_client.h"
 
 const unsigned int LEDPIN = 25;
 
@@ -94,6 +95,12 @@ int main(void)
                                  WIFI_CONNECT_TIMEOUT_MS)) 
         {
             printf("Auto-connect successful\n");
+
+            // Initialize and sync time from NTP server
+            ntp_client_init();
+            ntp_client_request();
+            printf("NTP time sync requested\n");
+
             transition_to_state(&ui_ctx, APP_STATE_MAIN_APP);
         } 
         else 
@@ -184,14 +191,19 @@ int main(void)
                         printf("WiFi connected successfully\n");
 
                         // Save configuration to flash
-                        if (wifi_config_save(&ui_ctx.config)) 
+                        if (wifi_config_save(&ui_ctx.config))
                         {
                             printf("WiFi config saved to flash\n");
-                        } 
-                        else 
+                        }
+                        else
                         {
                             printf("Warning: Could not save WiFi config\n");
                         }
+
+                        // Initialize and sync time from NTP server
+                        ntp_client_init();
+                        ntp_client_request();
+                        printf("NTP time sync requested\n");
 
                         transition_to_state(&ui_ctx, APP_STATE_MAIN_APP);
                     } 
