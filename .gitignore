@@ -19,10 +19,8 @@ compile_commands.json
 # Linker scripts (generated)
 *.ld
 
-# Dependencies (managed via git submodules or CMake)
+# Dependencies (managed via CMake)
 pico-sdk/
-lvgl/
-lib/
 
 # Editor/IDE files
 !.vscode/*

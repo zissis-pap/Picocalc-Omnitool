@@ -321,8 +321,7 @@ lv_obj_t* create_main_app_screen(ui_context_t *ctx) {
 
     // Title with version info
     lv_obj_t *title = lv_label_create(screen);
-    lv_label_set_text_fmt(title, "Omnitool %s\nBuild #%d - %s %s",
-                          VERSION_STRING, BUILD_NUMBER, BUILD_DATE, BUILD_TIME);
+    lv_label_set_text_fmt(title, "%s", VERSION_STRING);
     lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 5);
 

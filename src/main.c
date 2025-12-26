@@ -14,7 +14,7 @@
 #include "hardware/gpio.h"
 #include "pico/cyw43_arch.h"
 #include "lv_conf.h"
-#include "lvgl/lvgl.h"
+#include "lvgl.h"
 #include "lv_port_indev_picocalc_kb.h"
 #include "lv_port_disp_picocalc_ILI9488.h"
 #include "wifi_config.h"

@@ -1,7 +1,7 @@
 #ifndef UI_SCREENS_H
 #define UI_SCREENS_H
 
-#include "lvgl/lvgl.h"
+#include "lvgl.h"
 #include "wifi_config.h"
 
 // Application states

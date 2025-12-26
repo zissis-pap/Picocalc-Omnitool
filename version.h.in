@@ -3,13 +3,18 @@
 
 #define APP_VERSION_MAJOR 0
 #define APP_VERSION_MINOR 0
-#define APP_VERSION_PATCH 2
+#define APP_VERSION_PATCH 3
 
 #define BUILD_DATE "@BUILD_DATE@"
 #define BUILD_TIME "@BUILD_TIME@"
 #define BUILD_NUMBER @BUILD_NUMBER@
 
-#define VERSION_STRING "v0.00.2"
-#define FULL_VERSION_STRING "v0.00.2 (Build @BUILD_NUMBER@, @BUILD_DATE@ @BUILD_TIME@)"
+// Helper macros for stringification
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
+// Auto-generate version strings from version defines
+#define VERSION_STRING "v" TOSTRING(APP_VERSION_MAJOR) "." TOSTRING(APP_VERSION_MINOR) "." TOSTRING(APP_VERSION_PATCH)
+#define FULL_VERSION_STRING VERSION_STRING " (Build " TOSTRING(BUILD_NUMBER) ", " BUILD_DATE " " BUILD_TIME ")"
 
 #endif // VERSION_H

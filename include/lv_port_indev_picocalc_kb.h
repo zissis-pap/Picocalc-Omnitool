@@ -1,12 +1,13 @@
+
 /**
- * @file lv_port_disp_picocalc_ILI9488.h
+ * @file lv_port_indev_picocalc_kb.h
  *
  */
 
 #if 1
 
-#ifndef LV_PORT_DISP_PICOCALC_ILI9488_H
-#define LV_PORT_DISP_PICOCALC_ILI9488_H
+#ifndef LV_PORT_INDEV_PICOCALC_KB_H
+#define LV_PORT_INDEV_PICOCALC_KB_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,7 +19,7 @@ extern "C" {
 #if defined(LV_LVGL_H_INCLUDE_SIMPLE)
 #include "lvgl.h"
 #else
-#include "lvgl/lvgl.h"
+#include "lvgl.h"
 #endif
 
 /*********************
@@ -32,16 +33,7 @@ extern "C" {
 /**********************
  * GLOBAL PROTOTYPES
  **********************/
-/* Initialize low level display driver */
-void lv_port_disp_init(void);
-
-/* Enable updating the screen (the flushing process) when disp_flush() is called by LVGL
- */
-void disp_enable_update(void);
-
-/* Disable updating the screen (the flushing process) when disp_flush() is called by LVGL
- */
-void disp_disable_update(void);
+void lv_port_indev_init(void);
 
 /**********************
  *      MACROS
@@ -51,6 +43,6 @@ void disp_disable_update(void);
 } /*extern "C"*/
 #endif
 
-#endif /*LV_PORT_DISP_PICOCALC_ILI9488_H*/
+#endif /*LV_PORT_INDEV_PICOCALC_KB_H*/
 
 #endif /*Disable/Enable content*/
