@@ -1,11 +1,9 @@
 /**
- * PicoCalc LVGL Graphics Demo
+ * PicoCalc Omnitool
  *
- * Demo App Uses LVGL to show demos on the PicoCalc.
  * Implements WiFi configuration, keyboard input and display driver.
  *
- * Author: HsuahHanLai
- * https://www.hsuanhanlai.com/
+ * Author: Zissis Papadopoulos
  */
 
 #include <stdio.h>
@@ -22,7 +20,7 @@
 
 const unsigned int LEDPIN = 25;
 
-int main()
+int main(void)
 {
     // Initialize standard I/O
     stdio_init_all();
@@ -99,11 +97,13 @@ int main()
             case APP_STATE_WIFI_SCAN:
                 // Check if we need to start a new scan
                 if (ui_ctx.scan_requested) {
-                    printf("Starting WiFi scan...\n");
+                    printf("Starting WiFi scan (scan_requested=true)...\n");
                     ui_ctx.scan_requested = false;
                     if (!wifi_start_scan(&ui_ctx.scan_state)) {
+                        printf("ERROR: wifi_start_scan failed\n");
                         show_error_message(&ui_ctx, ERROR_SCAN_FAILED);
                     } else {
+                        printf("Scan started successfully, waiting for results...\n");
                         scan_start_time = get_absolute_time();
                     }
                 }
@@ -128,6 +128,7 @@ int main()
                         ui_ctx.scan_state.scan_complete = true;
                         printf("WiFi scan complete, found %d networks\n", ui_ctx.scan_state.count);
                         wifi_sort_scan_results(&ui_ctx.scan_state);
+                        printf("Updating screen with scan results...\n");
                         transition_to_state(&ui_ctx, APP_STATE_WIFI_SCAN);
                     }
                 }

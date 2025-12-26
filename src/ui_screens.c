@@ -13,6 +13,7 @@ static void retry_btn_event(lv_event_t *e);
 static void choose_different_btn_event(lv_event_t *e);
 static void settings_btn_event(lv_event_t *e);
 static void forget_network_event(lv_event_t *e);
+static void skip_btn_event(lv_event_t *e);
 
 // Global UI context pointer for event handlers
 static ui_context_t *g_ui_ctx = NULL;
@@ -104,6 +105,16 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) {
         lv_obj_t *spinner = lv_spinner_create(screen);
         lv_obj_set_size(spinner, 60, 60);
         lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 20);
+
+        // Skip button
+        lv_obj_t *skip_btn = lv_btn_create(screen);
+        lv_obj_set_size(skip_btn, 120, 35);
+        lv_obj_align(skip_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_obj_add_event_cb(skip_btn, skip_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *skip_label = lv_label_create(skip_btn);
+        lv_label_set_text(skip_label, "Skip");
+        lv_obj_center(skip_label);
     } else if (ctx->scan_state.count == 0) {
         lv_label_set_text(scan_label, "No networks found");
         lv_obj_align(scan_label, LV_ALIGN_CENTER, 0, -40);
@@ -111,12 +122,22 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) {
         // Rescan button
         lv_obj_t *rescan_btn = lv_btn_create(screen);
         lv_obj_set_size(rescan_btn, 150, 40);
-        lv_obj_align(rescan_btn, LV_ALIGN_CENTER, 0, 20);
+        lv_obj_align(rescan_btn, LV_ALIGN_CENTER, 0, 10);
         lv_obj_add_event_cb(rescan_btn, rescan_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *btn_label = lv_label_create(rescan_btn);
         lv_label_set_text(btn_label, "Scan Again");
         lv_obj_center(btn_label);
+
+        // Skip button
+        lv_obj_t *skip_btn = lv_btn_create(screen);
+        lv_obj_set_size(skip_btn, 120, 35);
+        lv_obj_align(skip_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_obj_add_event_cb(skip_btn, skip_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *skip_label = lv_label_create(skip_btn);
+        lv_label_set_text(skip_label, "Skip");
+        lv_obj_center(skip_label);
     } else {
         // Create dropdown with network list
         lv_obj_t *dropdown = lv_dropdown_create(screen);
@@ -157,15 +178,25 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) {
         lv_label_set_text(connect_label, "Connect");
         lv_obj_center(connect_label);
 
-        // Rescan button
+        // Rescan button (left side at bottom)
         lv_obj_t *rescan_btn = lv_btn_create(screen);
-        lv_obj_set_size(rescan_btn, 120, 35);
-        lv_obj_align(rescan_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_obj_set_size(rescan_btn, 100, 35);
+        lv_obj_align(rescan_btn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
         lv_obj_add_event_cb(rescan_btn, rescan_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *btn_label = lv_label_create(rescan_btn);
         lv_label_set_text(btn_label, "Rescan");
         lv_obj_center(btn_label);
+
+        // Skip button (right side at bottom)
+        lv_obj_t *skip_btn = lv_btn_create(screen);
+        lv_obj_set_size(skip_btn, 100, 35);
+        lv_obj_align(skip_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+        lv_obj_add_event_cb(skip_btn, skip_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *skip_label = lv_label_create(skip_btn);
+        lv_label_set_text(skip_label, "Skip");
+        lv_obj_center(skip_label);
     }
 
     return screen;
@@ -432,9 +463,13 @@ static void network_selected_event(lv_event_t *e) {
 static void rescan_btn_event(lv_event_t *e) {
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
+    printf("Rescan button clicked\n");
+
     // Reset scan state and request new scan
     memset(&ctx->scan_state, 0, sizeof(wifi_scan_state_t));
     ctx->scan_requested = true;
+
+    printf("Scan state reset, requesting new scan\n");
     transition_to_state(ctx, APP_STATE_WIFI_SCAN);
 }
 
@@ -564,4 +599,13 @@ static void forget_network_event(lv_event_t *e) {
             lv_msgbox_close(mbox);
         }
     }
+}
+
+// Event handler: Skip WiFi connection
+static void skip_btn_event(lv_event_t *e) {
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    printf("Skipping WiFi connection\n");
+    // Skip WiFi setup and go directly to main app
+    transition_to_state(ctx, APP_STATE_MAIN_APP);
 }

@@ -162,6 +162,13 @@ static int scan_result_callback(void *env, const cyw43_ev_scan_result_t *result)
 
 // Start WiFi scan
 bool wifi_start_scan(wifi_scan_state_t *state) {
+    // Check if a scan is already active
+    if (cyw43_wifi_scan_active(&cyw43_state)) {
+        printf("Scan already in progress, cannot start new scan\n");
+        state->scan_error = true;
+        return false;
+    }
+
     memset(state, 0, sizeof(wifi_scan_state_t));
     g_scan_state = state;
 
@@ -176,6 +183,7 @@ bool wifi_start_scan(wifi_scan_state_t *state) {
         return false;
     }
 
+    printf("WiFi scan started successfully\n");
     return true;
 }
 
