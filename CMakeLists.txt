@@ -64,6 +64,7 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/lib/lvgl lvgl)
 add_executable(picocalc_omnitool
     src/main.c
     src/wifi_config.c
+    src/ble_config.c
     src/ui_screens.c
     src/lv_port_indev_picocalc_kb.c
     src/lv_port_disp_picocalc_ILI9488.c
@@ -73,6 +74,7 @@ target_compile_options(picocalc_omnitool PRIVATE -DPICOMITE
 										-DPICO_HEAP_SIZE=0x1000
 										-DGUICONTROLS
 										-DPICO_CORE0_STACK_SIZE=0x1000
+										-DENABLE_BLE
 										)
 
 target_compile_definitions(picocalc_omnitool PRIVATE LV_USE_DEMO_WIDGETS=1)

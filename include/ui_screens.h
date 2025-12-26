@@ -3,6 +3,7 @@
 
 #include "lvgl.h"
 #include "wifi_config.h"
+#include "ble_config.h"
 
 // Application states
 typedef enum {
@@ -14,7 +15,12 @@ typedef enum {
     APP_STATE_WIFI_CONNECTING,
     APP_STATE_WIFI_ERROR,
     APP_STATE_MAIN_APP,
-    APP_STATE_SETTINGS
+    APP_STATE_SETTINGS,
+    APP_STATE_BLE_SCAN,
+    APP_STATE_BLE_CONNECTING,
+    APP_STATE_BLE_CONNECTED,
+    APP_STATE_BLE_ERROR,
+    APP_STATE_SPS_DATA
 } app_state_t;
 
 // Error types
@@ -25,20 +31,37 @@ typedef enum {
     ERROR_CONNECTION_TIMEOUT,
     ERROR_CONNECTION_FAILED,
     ERROR_WRONG_PASSWORD,
-    ERROR_AUTO_CONNECT_FAILED
+    ERROR_AUTO_CONNECT_FAILED,
+    ERROR_BLE_SCAN_FAILED,
+    ERROR_BLE_NO_DEVICES,
+    ERROR_BLE_CONNECTION_FAILED,
+    ERROR_BLE_NO_SPS_SERVICE,
+    ERROR_BLE_DATA_TRANSFER_FAILED
 } error_type_t;
 
 // Global UI context
 typedef struct {
     app_state_t current_state;
     lv_obj_t *current_screen;
+
+    // WiFi state
     wifi_scan_state_t scan_state;
     wifi_config_t config;
     char selected_ssid[WIFI_SSID_MAX_LEN + 1];
     uint32_t selected_auth;
-    error_type_t last_error;
     int auto_connect_retry_count;
     bool scan_requested;  // Flag to trigger new scan
+
+    // BLE state
+    ble_scan_state_t ble_scan_state;
+    bd_addr_t selected_ble_address;
+    bd_addr_type_t selected_ble_address_type;
+    char selected_ble_name[BLE_DEVICE_NAME_MAX_LEN + 1];
+    sps_device_type_t selected_sps_type;
+    bool ble_scan_requested;
+
+    // Common
+    error_type_t last_error;
 } ui_context_t;
 
 // Initialize UI system
@@ -55,6 +78,9 @@ lv_obj_t* create_password_screen(ui_context_t *ctx);
 lv_obj_t* create_connecting_screen(ui_context_t *ctx);
 lv_obj_t* create_error_screen(ui_context_t *ctx);
 lv_obj_t* create_main_app_screen(ui_context_t *ctx);
+lv_obj_t* create_ble_scan_screen(ui_context_t *ctx);
+lv_obj_t* create_ble_connecting_screen(ui_context_t *ctx);
+lv_obj_t* create_sps_data_screen(ui_context_t *ctx);
 
 // UI update functions
 void update_connection_status(ui_context_t *ctx, const char *status);

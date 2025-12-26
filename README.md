@@ -1,6 +1,6 @@
 # Picocalc-Omnitool
 
-A comprehensive application for the PicoCalc that showcases LVGL graphics engine integration with WiFi configuration, keyboard input, and display management. Optimized for RP2350 (Pico 2W) with DMA-accelerated graphics.
+A comprehensive application for the PicoCalc that showcases LVGL graphics engine integration with WiFi configuration, Bluetooth Low Energy (BLE) connectivity, keyboard input, and display management. Optimized for RP2350 (Pico 2W) with DMA-accelerated graphics and dual-core processing.
 
 ## Features
 
@@ -9,6 +9,8 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 - **Display Support**: SPI display driver for ILI9488 with optimized rendering
 - **Keyboard Input**: I2C keyboard support with LVGL input device driver
 - **WiFi Management**: Complete WiFi configuration and connection system
+- **BLE Connectivity**: Bluetooth Low Energy scanning and Serial Port Service support
+- **Dual-Core Architecture**: Optimized multicore processing (Core0: UI/WiFi, Core1: BLE)
 - **Multi-Platform**: Support for both Raspberry Pi Pico (RP2040) and Pico 2 (RP2350)
 
 ### WiFi Features
@@ -20,12 +22,24 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 - **Signal Strength**: Networks sorted by RSSI for optimal connection
 - **Skip Option**: Ability to skip WiFi setup and proceed to main app without connection
 
+### BLE Features
+- **Real-Time Device Discovery**: BLE devices appear dynamically as they're found during scanning
+- **SPS Service Support**: Compatible with Nordic UART Service (NUS) and u-blox Serial Port Service
+- **Service Auto-Detection**: Automatically identifies SPS-compatible devices with [SPS] indicator
+- **Bi-Directional Communication**: Send and receive data via Serial Port Service
+- **30-Second Scan Window**: Automatic timeout with continuous device updates
+- **User Selection**: Interactive device list with signal strength sorting
+- **Connection Management**: Status monitoring, disconnect handling, and error recovery
+- **Core1 Execution**: BLE operations run on dedicated core for non-blocking performance
+
 ### User Interface
 - **WiFi Setup Flow**: Guided network selection and password entry
+- **BLE Scan Screen**: Dynamic device discovery with real-time updates
+- **SPS Data Screen**: Send/receive interface for Serial Port Service communication
 - **On-Screen Keyboard**: LVGL keyboard for password input
-- **Status Indicators**: Real-time WiFi connection status display
+- **Status Indicators**: Real-time WiFi and BLE connection status display
 - **Error Handling**: User-friendly error messages and retry options
-- **Settings Menu**: Quick access to WiFi reconfiguration
+- **Dual Access**: Quick access buttons for both WiFi and BLE from main menu
 
 ### Technical Features
 - **DMA-Accelerated Graphics**: Hardware DMA for SPI transfers (10-15x faster screen updates)

@@ -14,6 +14,13 @@ static void choose_different_btn_event(lv_event_t *e);
 static void settings_btn_event(lv_event_t *e);
 static void forget_network_event(lv_event_t *e);
 static void skip_btn_event(lv_event_t *e);
+static void ble_device_selected_event(lv_event_t *e);
+static void ble_rescan_btn_event(lv_event_t *e);
+static void ble_connect_btn_event(lv_event_t *e);
+static void ble_disconnect_btn_event(lv_event_t *e);
+static void ble_send_btn_event(lv_event_t *e);
+static void ble_menu_btn_event(lv_event_t *e);
+static void ble_back_btn_event(lv_event_t *e);
 
 // Global UI context pointer for event handlers
 static ui_context_t *g_ui_ctx = NULL;
@@ -21,6 +28,8 @@ static ui_context_t *g_ui_ctx = NULL;
 // Global widgets that need to be accessed across functions
 static lv_obj_t *password_ta = NULL;
 static lv_obj_t *status_label = NULL;
+static lv_obj_t *sps_rx_textarea = NULL;  // For displaying received SPS data
+static lv_obj_t *sps_tx_textarea = NULL;  // For entering data to send via SPS
 
 // Initialize UI system
 void ui_init(ui_context_t *ctx) {
@@ -40,7 +49,7 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
     }
 
     // Create new screen based on state
-    switch (new_state) 
+    switch (new_state)
     {
         case APP_STATE_INIT:
             ctx->current_screen = create_splash_screen(ctx);
@@ -56,10 +65,20 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
             ctx->current_screen = create_connecting_screen(ctx);
             break;
         case APP_STATE_WIFI_ERROR:
+        case APP_STATE_BLE_ERROR:
             ctx->current_screen = create_error_screen(ctx);
             break;
         case APP_STATE_MAIN_APP:
             ctx->current_screen = create_main_app_screen(ctx);
+            break;
+        case APP_STATE_BLE_SCAN:
+            ctx->current_screen = create_ble_scan_screen(ctx);
+            break;
+        case APP_STATE_BLE_CONNECTING:
+            ctx->current_screen = create_ble_connecting_screen(ctx);
+            break;
+        case APP_STATE_SPS_DATA:
+            ctx->current_screen = create_sps_data_screen(ctx);
             break;
         default:
             return;
@@ -390,15 +409,25 @@ lv_obj_t* create_main_app_screen(ui_context_t *ctx)
     }
     lv_obj_align(wifi_status, LV_ALIGN_TOP_LEFT, 5, 25);
 
-    // Settings button
+    // WiFi Settings button
     lv_obj_t *settings_btn = lv_btn_create(screen);
     lv_obj_set_size(settings_btn, 50, 30);
-    lv_obj_align(settings_btn, LV_ALIGN_TOP_RIGHT, -5, 20);
+    lv_obj_align(settings_btn, LV_ALIGN_TOP_RIGHT, -60, 20);
     lv_obj_add_event_cb(settings_btn, settings_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *settings_label = lv_label_create(settings_btn);
     lv_label_set_text(settings_label, "WiFi");
     lv_obj_center(settings_label);
+
+    // BLE button
+    lv_obj_t *ble_btn = lv_btn_create(screen);
+    lv_obj_set_size(ble_btn, 50, 30);
+    lv_obj_align(ble_btn, LV_ALIGN_TOP_RIGHT, -5, 20);
+    lv_obj_add_event_cb(ble_btn, ble_menu_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *ble_label = lv_label_create(ble_btn);
+    lv_label_set_text(ble_label, "BLE");
+    lv_obj_center(ble_label);
 
     // Original output textarea
     lv_obj_t *output_ta = lv_textarea_create(screen);
@@ -433,9 +462,9 @@ void show_error_message(ui_context_t *ctx, error_type_t error)
 }
 
 // Get error message string
-const char* get_error_message(error_type_t error) 
+const char* get_error_message(error_type_t error)
 {
-    switch (error) 
+    switch (error)
     {
         case ERROR_SCAN_FAILED:
             return "Failed to scan for networks.\nPlease try again.";
@@ -449,6 +478,16 @@ const char* get_error_message(error_type_t error)
             return "Incorrect password.\nPlease check and retry.";
         case ERROR_AUTO_CONNECT_FAILED:
             return "Auto-connect failed.\nPlease reconfigure WiFi.";
+        case ERROR_BLE_SCAN_FAILED:
+            return "BLE scan failed.\nPlease try again.";
+        case ERROR_BLE_NO_DEVICES:
+            return "No BLE devices found.\nCheck if Bluetooth is enabled.";
+        case ERROR_BLE_CONNECTION_FAILED:
+            return "Failed to connect to device.\nPlease try again.";
+        case ERROR_BLE_NO_SPS_SERVICE:
+            return "Device does not support SPS.\nPlease select a different device.";
+        case ERROR_BLE_DATA_TRANSFER_FAILED:
+            return "Data transfer failed.\nCheck connection.";
         default:
             return "Unknown error occurred.";
     }
@@ -656,11 +695,407 @@ static void forget_network_event(lv_event_t *e)
 }
 
 // Event handler: Skip WiFi connection
-static void skip_btn_event(lv_event_t *e) 
+static void skip_btn_event(lv_event_t *e)
 {
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
     printf("Skipping WiFi connection\n");
     // Skip WiFi setup and go directly to main app
+    transition_to_state(ctx, APP_STATE_MAIN_APP);
+}
+
+// =============================================================================
+// BLE Screen Implementations
+// =============================================================================
+
+// Create BLE scan screen
+lv_obj_t* create_ble_scan_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+
+    // Title
+    lv_obj_t *title = lv_label_create(screen);
+    lv_label_set_text(title, "Select BLE Device");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+
+    // Scanning status
+    lv_obj_t *scan_label = lv_label_create(screen);
+
+    if (!ctx->ble_scan_state.scan_complete && ctx->ble_scan_state.count == 0)
+    {
+        // Scanning with no devices found yet
+        lv_label_set_text(scan_label, "Scanning for BLE devices...");
+        lv_obj_align(scan_label, LV_ALIGN_CENTER, 0, -30);
+
+        // Spinner
+        lv_obj_t *spinner = lv_spinner_create(screen);
+        lv_obj_set_size(spinner, 60, 60);
+        lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 20);
+
+        // Back button
+        lv_obj_t *back_btn = lv_btn_create(screen);
+        lv_obj_set_size(back_btn, 120, 35);
+        lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_obj_add_event_cb(back_btn, ble_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *back_label = lv_label_create(back_btn);
+        lv_label_set_text(back_label, "Back");
+        lv_obj_center(back_label);
+    }
+    else if (ctx->ble_scan_state.count == 0)
+    {
+        lv_label_set_text(scan_label, "No BLE devices found");
+        lv_obj_align(scan_label, LV_ALIGN_CENTER, 0, -40);
+
+        // Rescan button
+        lv_obj_t *rescan_btn = lv_btn_create(screen);
+        lv_obj_set_size(rescan_btn, 150, 40);
+        lv_obj_align(rescan_btn, LV_ALIGN_CENTER, 0, 10);
+        lv_obj_add_event_cb(rescan_btn, ble_rescan_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *btn_label = lv_label_create(rescan_btn);
+        lv_label_set_text(btn_label, "Scan Again");
+        lv_obj_center(btn_label);
+
+        // Back button
+        lv_obj_t *back_btn = lv_btn_create(screen);
+        lv_obj_set_size(back_btn, 120, 35);
+        lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_obj_add_event_cb(back_btn, ble_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *back_label = lv_label_create(back_btn);
+        lv_label_set_text(back_label, "Back");
+        lv_obj_center(back_label);
+    }
+    else
+    {
+        // Devices found - show them (whether still scanning or complete)
+        if (!ctx->ble_scan_state.scan_complete)
+        {
+            char scan_text[50];
+            snprintf(scan_text, sizeof(scan_text), "Scanning... (%d found)", ctx->ble_scan_state.count);
+            lv_label_set_text(scan_label, scan_text);
+        }
+        else
+        {
+            lv_label_set_text(scan_label, "Select a device:");
+        }
+        lv_obj_align(scan_label, LV_ALIGN_TOP_MID, 0, 40);
+
+        // Create dropdown with device list
+        lv_obj_t *dropdown = lv_dropdown_create(screen);
+        lv_obj_set_width(dropdown, 280);
+        lv_obj_align(dropdown, LV_ALIGN_TOP_MID, 0, 70);
+
+        // Build device list string
+        char device_list[MAX_BLE_SCAN_RESULTS * 60] = {0};
+        for (int i = 0; i < ctx->ble_scan_state.count; i++)
+        {
+            if (i > 0) strcat(device_list, "\n");
+
+            char device_entry[60];
+            char addr_str[18];
+            ble_address_to_string(ctx->ble_scan_state.results[i].address, addr_str, sizeof(addr_str));
+
+            if (ctx->ble_scan_state.results[i].has_sps_service)
+            {
+                snprintf(device_entry, sizeof(device_entry), "%s [SPS]",
+                        ctx->ble_scan_state.results[i].name);
+            }
+            else
+            {
+                snprintf(device_entry, sizeof(device_entry), "%s",
+                        ctx->ble_scan_state.results[i].name);
+            }
+            strcat(device_list, device_entry);
+        }
+
+        lv_dropdown_set_options(dropdown, device_list);
+        lv_obj_add_event_cb(dropdown, ble_device_selected_event, LV_EVENT_VALUE_CHANGED, ctx);
+
+        // Connect button
+        lv_obj_t *connect_btn = lv_btn_create(screen);
+        lv_obj_set_size(connect_btn, 120, 40);
+        lv_obj_align(connect_btn, LV_ALIGN_CENTER, -65, 50);
+        lv_obj_set_user_data(connect_btn, dropdown);
+        lv_obj_add_event_cb(connect_btn, ble_connect_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *connect_label = lv_label_create(connect_btn);
+        lv_label_set_text(connect_label, "Connect");
+        lv_obj_center(connect_label);
+
+        // Rescan button
+        lv_obj_t *rescan_btn = lv_btn_create(screen);
+        lv_obj_set_size(rescan_btn, 120, 40);
+        lv_obj_align(rescan_btn, LV_ALIGN_CENTER, 65, 50);
+        lv_obj_add_event_cb(rescan_btn, ble_rescan_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *rescan_label = lv_label_create(rescan_btn);
+        lv_label_set_text(rescan_label, "Rescan");
+        lv_obj_center(rescan_label);
+
+        // Back button
+        lv_obj_t *back_btn = lv_btn_create(screen);
+        lv_obj_set_size(back_btn, 120, 35);
+        lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_obj_add_event_cb(back_btn, ble_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *back_label = lv_label_create(back_btn);
+        lv_label_set_text(back_label, "Back");
+        lv_obj_center(back_label);
+    }
+
+    return screen;
+}
+
+// Create BLE connecting screen
+lv_obj_t* create_ble_connecting_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+
+    lv_obj_t *label = lv_label_create(screen);
+    lv_label_set_text_fmt(label, "Connecting to\n%s", ctx->selected_ble_name);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, -30);
+
+    lv_obj_t *spinner = lv_spinner_create(screen);
+    lv_obj_set_size(spinner, 60, 60);
+    lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 20);
+
+    return screen;
+}
+
+// Create SPS data screen
+lv_obj_t* create_sps_data_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+
+    // Title with device name
+    lv_obj_t *title = lv_label_create(screen);
+    lv_label_set_text_fmt(title, "SPS: %s", ctx->selected_ble_name);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 5);
+
+    // Connection info
+    lv_obj_t *info_label = lv_label_create(screen);
+    char addr_str[18];
+    ble_address_to_string(ctx->selected_ble_address, addr_str, sizeof(addr_str));
+    lv_label_set_text_fmt(info_label, "%s (%s)",
+                          ble_sps_type_to_string(ctx->selected_sps_type),
+                          addr_str);
+    lv_obj_align(info_label, LV_ALIGN_TOP_MID, 0, 25);
+
+    // RX data (received from device) - read-only text area
+    lv_obj_t *rx_label = lv_label_create(screen);
+    lv_label_set_text(rx_label, "Received:");
+    lv_obj_align(rx_label, LV_ALIGN_TOP_LEFT, 10, 50);
+
+    sps_rx_textarea = lv_textarea_create(screen);
+    lv_obj_set_size(sps_rx_textarea, 300, 80);
+    lv_obj_align(sps_rx_textarea, LV_ALIGN_TOP_MID, 0, 70);
+    lv_textarea_set_text(sps_rx_textarea, "");
+    lv_textarea_set_placeholder_text(sps_rx_textarea, "Waiting for data...");
+    lv_obj_add_flag(sps_rx_textarea, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+
+    // TX data (send to device) - editable text area
+    lv_obj_t *tx_label = lv_label_create(screen);
+    lv_label_set_text(tx_label, "Send:");
+    lv_obj_align(tx_label, LV_ALIGN_TOP_LEFT, 10, 160);
+
+    sps_tx_textarea = lv_textarea_create(screen);
+    lv_obj_set_size(sps_tx_textarea, 220, 60);
+    lv_obj_align(sps_tx_textarea, LV_ALIGN_TOP_LEFT, 10, 180);
+    lv_textarea_set_text(sps_tx_textarea, "");
+    lv_textarea_set_placeholder_text(sps_tx_textarea, "Enter data...");
+    lv_textarea_set_one_line(sps_tx_textarea, false);
+    lv_textarea_set_max_length(sps_tx_textarea, 128);
+    lv_obj_add_flag(sps_tx_textarea, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+
+    // Send button
+    lv_obj_t *send_btn = lv_btn_create(screen);
+    lv_obj_set_size(send_btn, 70, 60);
+    lv_obj_align(send_btn, LV_ALIGN_TOP_RIGHT, -10, 180);
+    lv_obj_add_event_cb(send_btn, ble_send_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *send_label = lv_label_create(send_btn);
+    lv_label_set_text(send_label, "Send");
+    lv_obj_center(send_label);
+
+    // Disconnect button
+    lv_obj_t *disconnect_btn = lv_btn_create(screen);
+    lv_obj_set_size(disconnect_btn, 130, 35);
+    lv_obj_align(disconnect_btn, LV_ALIGN_BOTTOM_MID, -65, -10);
+    lv_obj_add_event_cb(disconnect_btn, ble_disconnect_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *disc_label = lv_label_create(disconnect_btn);
+    lv_label_set_text(disc_label, "Disconnect");
+    lv_obj_center(disc_label);
+
+    // Back to Main button
+    lv_obj_t *back_btn = lv_btn_create(screen);
+    lv_obj_set_size(back_btn, 130, 35);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 65, -10);
+    lv_obj_add_event_cb(back_btn, ble_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Main Menu");
+    lv_obj_center(back_label);
+
+    return screen;
+}
+
+// =============================================================================
+// BLE Event Handlers
+// =============================================================================
+
+// Event handler: BLE device selected from dropdown
+static void ble_device_selected_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+    lv_obj_t *dropdown = lv_event_get_target(e);
+    uint16_t selected = lv_dropdown_get_selected(dropdown);
+
+    if (selected < ctx->ble_scan_state.count)
+    {
+        // Store selected device info
+        memcpy(ctx->selected_ble_address,
+               ctx->ble_scan_state.results[selected].address, 6);
+        ctx->selected_ble_address_type = ctx->ble_scan_state.results[selected].address_type;
+        strncpy(ctx->selected_ble_name,
+                ctx->ble_scan_state.results[selected].name,
+                BLE_DEVICE_NAME_MAX_LEN);
+        ctx->selected_ble_name[BLE_DEVICE_NAME_MAX_LEN] = '\0';
+        ctx->selected_sps_type = ctx->ble_scan_state.results[selected].sps_type;
+
+        printf("Selected BLE device: %s\n", ctx->selected_ble_name);
+    }
+}
+
+// Event handler: BLE rescan button
+static void ble_rescan_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    printf("Rescanning for BLE devices\n");
+
+    // Stop any active scan first
+    if (ble_is_scanning())
+    {
+        printf("Stopping previous BLE scan\n");
+        ble_stop_scan();
+        sleep_ms(100);  // Give Core1 time to stop
+    }
+
+    // Clear error state
+    ctx->last_error = ERROR_NONE;
+
+    // Reset BLE scan state
+    memset(&ctx->ble_scan_state, 0, sizeof(ble_scan_state_t));
+    ctx->ble_scan_requested = true;
+
+    transition_to_state(ctx, APP_STATE_BLE_SCAN);
+}
+
+// Event handler: BLE connect button
+static void ble_connect_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+    lv_obj_t *btn = lv_event_get_target(e);
+    lv_obj_t *dropdown = (lv_obj_t *)lv_obj_get_user_data(btn);
+
+    // Get selected device
+    uint16_t selected = lv_dropdown_get_selected(dropdown);
+    if (selected < ctx->ble_scan_state.count)
+    {
+        // Store selected device info
+        memcpy(ctx->selected_ble_address,
+               ctx->ble_scan_state.results[selected].address, 6);
+        ctx->selected_ble_address_type = ctx->ble_scan_state.results[selected].address_type;
+        strncpy(ctx->selected_ble_name,
+                ctx->ble_scan_state.results[selected].name,
+                BLE_DEVICE_NAME_MAX_LEN);
+        ctx->selected_ble_name[BLE_DEVICE_NAME_MAX_LEN] = '\0';
+        ctx->selected_sps_type = ctx->ble_scan_state.results[selected].sps_type;
+
+        printf("Connecting to %s\n", ctx->selected_ble_name);
+        transition_to_state(ctx, APP_STATE_BLE_CONNECTING);
+    }
+}
+
+// Event handler: BLE disconnect button
+static void ble_disconnect_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    printf("Disconnecting from BLE device\n");
+    ble_disconnect();
+
+    transition_to_state(ctx, APP_STATE_MAIN_APP);
+}
+
+// Event handler: BLE send data button
+static void ble_send_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    const char *text = lv_textarea_get_text(sps_tx_textarea);
+    uint16_t len = strlen(text);
+
+    if (len > 0)
+    {
+        printf("Sending %d bytes via SPS: %s\n", len, text);
+
+        if (ble_sps_send_data((const uint8_t *)text, len))
+        {
+            // Clear send text area after successful send
+            lv_textarea_set_text(sps_tx_textarea, "");
+        }
+        else
+        {
+            printf("Failed to send data\n");
+            ctx->last_error = ERROR_BLE_DATA_TRANSFER_FAILED;
+            transition_to_state(ctx, APP_STATE_BLE_ERROR);
+        }
+    }
+}
+
+// Event handler: BLE menu button (from main app)
+static void ble_menu_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    printf("Opening BLE scan menu\n");
+
+    // Stop any active scan first
+    if (ble_is_scanning())
+    {
+        printf("Stopping previous BLE scan\n");
+        ble_stop_scan();
+        sleep_ms(100);  // Give Core1 time to stop
+    }
+
+    // Clear error state
+    ctx->last_error = ERROR_NONE;
+
+    // Reset BLE scan state
+    memset(&ctx->ble_scan_state, 0, sizeof(ble_scan_state_t));
+    ctx->ble_scan_requested = true;
+
+    transition_to_state(ctx, APP_STATE_BLE_SCAN);
+}
+
+// Event handler: BLE back button
+static void ble_back_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    printf("Returning to main app from BLE\n");
+
+    // Stop any active scan
+    if (ble_is_scanning())
+    {
+        printf("Stopping BLE scan\n");
+        ble_stop_scan();
+    }
+
+    // Return to main app
     transition_to_state(ctx, APP_STATE_MAIN_APP);
 }

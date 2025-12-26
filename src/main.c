@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 #include "hardware/gpio.h"
 #include "pico/cyw43_arch.h"
 #include "lv_conf.h"
@@ -16,9 +17,20 @@
 #include "lv_port_indev_picocalc_kb.h"
 #include "lv_port_disp_picocalc_ILI9488.h"
 #include "wifi_config.h"
+#include "ble_config.h"
 #include "ui_screens.h"
 
 const unsigned int LEDPIN = 25;
+
+// SPS data received callback - updates UI with received data
+static void sps_data_received(const uint8_t *data, uint16_t length)
+{
+    // Note: This runs on Core1, need to be careful with shared data
+    printf("Received %d bytes via SPS: %.*s\n", length, length, data);
+
+    // TODO: Add to RX textarea in SPS data screen
+    // For now, just print to console
+}
 
 int main(void)
 {
@@ -47,6 +59,14 @@ int main(void)
     lv_port_indev_init();
 
     printf("system boot\n");
+
+    // Initialize BLE on Core1
+    printf("Launching BLE on Core1...\n");
+    ble_init();
+    ble_sps_set_data_callback(sps_data_received);
+    multicore_launch_core1(ble_core1_entry);
+    sleep_ms(100);  // Give Core1 time to initialize
+    printf("Core1 launched\n");
 
     // Initialize UI context
     static ui_context_t ui_ctx;
@@ -186,15 +206,154 @@ int main(void)
             case APP_STATE_MAIN_APP:
                 // Check WiFi connection periodically
                 static uint32_t last_check = 0;
+                static bool was_connected = false;
                 uint32_t now = to_ms_since_boot(get_absolute_time());
-                if (now - last_check > 10000) 
+
+                if (now - last_check > 10000)
                 {  // Check every 10 seconds
-                    if (!wifi_is_connected()) 
+                    bool is_connected = wifi_is_connected();
+
+                    // Only report if connection was lost (not if never connected)
+                    if (was_connected && !is_connected)
                     {
                         printf("WiFi connection lost\n");
                         // Could implement auto-reconnect here
                     }
+
+                    was_connected = is_connected;
                     last_check = now;
+                }
+                break;
+
+            case APP_STATE_BLE_SCAN:
+                {
+                    static absolute_time_t ble_scan_start_time;
+                    static int last_device_count = 0;
+                    static bool scan_timeout_shown = false;
+
+                    // Check if we need to start a new BLE scan
+                    if (ui_ctx.ble_scan_requested)
+                    {
+                        printf("Starting BLE scan (ble_scan_requested=true)...\n");
+                        ui_ctx.ble_scan_requested = false;
+                        last_device_count = 0;
+                        scan_timeout_shown = false;
+
+                        if (!ble_start_scan())
+                        {
+                            printf("ERROR: ble_start_scan failed\n");
+                            show_error_message(&ui_ctx, ERROR_BLE_SCAN_FAILED);
+                        }
+                        else
+                        {
+                            printf("BLE scan started successfully\n");
+                            ble_scan_start_time = get_absolute_time();
+                        }
+                    }
+
+                    // While scanning, check for new devices and timeout
+                    if (ble_is_scanning())
+                    {
+                        // Get current scan results
+                        ble_get_scan_results(&ui_ctx.ble_scan_state);
+
+                        // If new devices found, update UI
+                        if (ui_ctx.ble_scan_state.count > last_device_count)
+                        {
+                            last_device_count = ui_ctx.ble_scan_state.count;
+                            ble_sort_scan_results(&ui_ctx.ble_scan_state);
+                            printf("Found %d BLE devices so far...\n", last_device_count);
+
+                            // Mark as incomplete so UI shows "Scanning..." with device list
+                            ui_ctx.ble_scan_state.scan_complete = false;
+                            transition_to_state(&ui_ctx, APP_STATE_BLE_SCAN);
+                        }
+
+                        // Check for timeout (30 seconds)
+                        if (absolute_time_diff_us(ble_scan_start_time, get_absolute_time()) > 30000000)
+                        {
+                            printf("BLE scan timeout reached\n");
+                            ble_stop_scan();
+                            ble_get_scan_results(&ui_ctx.ble_scan_state);
+                            ble_sort_scan_results(&ui_ctx.ble_scan_state);
+                            ui_ctx.ble_scan_state.scan_complete = true;
+                            printf("BLE scan complete, found %d devices total\n", ui_ctx.ble_scan_state.count);
+                            transition_to_state(&ui_ctx, APP_STATE_BLE_SCAN);
+                            scan_timeout_shown = true;
+                        }
+                    }
+                    else if (!scan_timeout_shown && ui_ctx.ble_scan_state.scan_active)
+                    {
+                        // Scan stopped (not by timeout), get final results
+                        ble_get_scan_results(&ui_ctx.ble_scan_state);
+                        ble_sort_scan_results(&ui_ctx.ble_scan_state);
+                        ui_ctx.ble_scan_state.scan_complete = true;
+                        printf("BLE scan stopped, found %d devices\n", ui_ctx.ble_scan_state.count);
+                        transition_to_state(&ui_ctx, APP_STATE_BLE_SCAN);
+                    }
+                }
+                break;
+
+            case APP_STATE_BLE_CONNECTING:
+                {
+                    // Initiate connection
+                    bool connected = ble_connect(ui_ctx.selected_ble_address,
+                                                ui_ctx.selected_ble_address_type);
+
+                    if (connected)
+                    {
+                        printf("BLE connection initiated\n");
+
+                        // Wait for connection to complete (with timeout)
+                        int timeout = 100;  // 10 seconds
+                        while (timeout-- > 0 && !ble_is_connected())
+                        {
+                            sleep_ms(100);
+                        }
+
+                        if (ble_is_connected())
+                        {
+                            printf("BLE connected successfully\n");
+
+                            // Wait for SPS service discovery
+                            timeout = 100;  // 10 seconds
+                            while (timeout-- > 0 && !ble_is_sps_ready())
+                            {
+                                sleep_ms(100);
+                            }
+
+                            if (ble_is_sps_ready())
+                            {
+                                printf("SPS service ready\n");
+                                transition_to_state(&ui_ctx, APP_STATE_SPS_DATA);
+                            }
+                            else
+                            {
+                                printf("SPS service not found\n");
+                                show_error_message(&ui_ctx, ERROR_BLE_NO_SPS_SERVICE);
+                            }
+                        }
+                        else
+                        {
+                            printf("BLE connection timeout\n");
+                            show_error_message(&ui_ctx, ERROR_BLE_CONNECTION_FAILED);
+                        }
+                    }
+                    else
+                    {
+                        printf("BLE connection failed\n");
+                        show_error_message(&ui_ctx, ERROR_BLE_CONNECTION_FAILED);
+                    }
+                }
+                break;
+
+            case APP_STATE_SPS_DATA:
+                // SPS data screen active - data is handled by callback
+                // Just monitor connection status
+                if (!ble_is_connected())
+                {
+                    printf("BLE connection lost\n");
+                    show_error_message(&ui_ctx, ERROR_BLE_CONNECTION_FAILED);
                 }
                 break;
 
