@@ -1,5 +1,6 @@
 #include "ui_screens.h"
 #include "version.h"
+#include "news_api.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -21,6 +22,8 @@ static void ble_disconnect_btn_event(lv_event_t *e);
 static void ble_send_btn_event(lv_event_t *e);
 static void ble_menu_btn_event(lv_event_t *e);
 static void ble_back_btn_event(lv_event_t *e);
+static void news_feed_btn_event(lv_event_t *e);
+static void news_back_btn_event(lv_event_t *e);
 
 // Global UI context pointer for event handlers
 static ui_context_t *g_ui_ctx = NULL;
@@ -30,6 +33,9 @@ static lv_obj_t *password_ta = NULL;
 static lv_obj_t *status_label = NULL;
 static lv_obj_t *sps_rx_textarea = NULL;  // For displaying received SPS data
 static lv_obj_t *sps_tx_textarea = NULL;  // For entering data to send via SPS
+static lv_obj_t *news_list = NULL;        // For displaying news articles
+static lv_obj_t *news_status_label = NULL; // For news loading status
+static lv_timer_t *news_update_timer = NULL; // Timer for updating news display
 
 // Initialize UI system
 void ui_init(ui_context_t *ctx) {
@@ -79,6 +85,9 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
             break;
         case APP_STATE_SPS_DATA:
             ctx->current_screen = create_sps_data_screen(ctx);
+            break;
+        case APP_STATE_NEWS_FEED:
+            ctx->current_screen = create_news_feed_screen(ctx);
             break;
         default:
             return;
@@ -429,18 +438,20 @@ lv_obj_t* create_main_app_screen(ui_context_t *ctx)
     lv_label_set_text(ble_label, "BLE");
     lv_obj_center(ble_label);
 
-    // Original output textarea
-    lv_obj_t *output_ta = lv_textarea_create(screen);
-    lv_obj_set_size(output_ta, 300, 200);
-    lv_obj_align(output_ta, LV_ALIGN_TOP_MID, 0, 55);
-    lv_textarea_set_text(output_ta, "System ready.\nWiFi connected successfully.\n");
+    // Applications list label
+    lv_obj_t *apps_label = lv_label_create(screen);
+    lv_label_set_text(apps_label, "Applications:");
+    lv_obj_align(apps_label, LV_ALIGN_TOP_LEFT, 10, 60);
 
-    // Original input textarea
-    lv_obj_t *input_ta = lv_textarea_create(screen);
-    lv_obj_set_size(input_ta, 300, 40);
-    lv_obj_align(input_ta, LV_ALIGN_BOTTOM_MID, 0, -10);
-    lv_textarea_set_one_line(input_ta, true);
-    lv_textarea_set_placeholder_text(input_ta, "Command:");
+    // News Feed button
+    lv_obj_t *news_btn = lv_btn_create(screen);
+    lv_obj_set_size(news_btn, 300, 50);
+    lv_obj_align(news_btn, LV_ALIGN_TOP_MID, 0, 90);
+    lv_obj_add_event_cb(news_btn, news_feed_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *news_label = lv_label_create(news_btn);
+    lv_label_set_text(news_label, "News Feed");
+    lv_obj_center(news_label);
 
     return screen;
 }
@@ -1098,4 +1109,141 @@ static void ble_back_btn_event(lv_event_t *e)
 
     // Return to main app
     transition_to_state(ctx, APP_STATE_MAIN_APP);
+}
+
+// =============================================================================
+// News Feed Screen Event Handlers
+// =============================================================================
+
+// Event handler: News feed button
+static void news_feed_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    printf("Opening News Feed\n");
+    transition_to_state(ctx, APP_STATE_NEWS_FEED);
+}
+
+// Event handler: News back button
+static void news_back_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    printf("Returning to main app from News Feed\n");
+    transition_to_state(ctx, APP_STATE_MAIN_APP);
+}
+
+// =============================================================================
+// News Feed Screen Implementation
+// =============================================================================
+
+// Timer callback to update news display
+static void news_update_timer_cb(lv_timer_t *timer)
+{
+    news_data_t *news_data = news_api_get_data();
+
+    if (news_data->state == NEWS_STATE_SUCCESS && news_list != NULL && news_status_label != NULL) {
+        // Hide status label
+        lv_obj_add_flag(news_status_label, LV_OBJ_FLAG_HIDDEN);
+
+        // Clear the list
+        lv_obj_clean(news_list);
+
+        // Add news articles to the list
+        for (uint8_t i = 0; i < news_data->count; i++) {
+            char item_text[256];
+            if (strlen(news_data->articles[i].source) > 0) {
+                snprintf(item_text, sizeof(item_text), "[%s] %s",
+                         news_data->articles[i].source,
+                         news_data->articles[i].title);
+            } else {
+                snprintf(item_text, sizeof(item_text), "%s",
+                         news_data->articles[i].title);
+            }
+            lv_list_add_text(news_list, item_text);
+        }
+
+        // Stop the timer
+        if (news_update_timer != NULL) {
+            lv_timer_del(news_update_timer);
+            news_update_timer = NULL;
+        }
+
+        printf("News display updated with %d articles\n", news_data->count);
+
+    } else if (news_data->state == NEWS_STATE_ERROR && news_status_label != NULL) {
+        // Show error message
+        lv_label_set_text(news_status_label, news_data->error_message);
+
+        // Stop the timer
+        if (news_update_timer != NULL) {
+            lv_timer_del(news_update_timer);
+            news_update_timer = NULL;
+        }
+
+        printf("News fetch error: %s\n", news_data->error_message);
+    }
+    // If still fetching, timer will continue running
+}
+
+lv_obj_t* create_news_feed_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+
+    // Title
+    lv_obj_t *title = lv_label_create(screen);
+    lv_label_set_text(title, "News Feed");
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 5);
+
+    // Back button
+    lv_obj_t *back_btn = lv_btn_create(screen);
+    lv_obj_set_size(back_btn, 60, 30);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 5, 5);
+    lv_obj_add_event_cb(back_btn, news_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+    lv_obj_center(back_label);
+
+    // Status label for loading/error messages
+    news_status_label = lv_label_create(screen);
+    lv_obj_set_style_text_align(news_status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(news_status_label, LV_ALIGN_CENTER, 0, -50);
+
+    // List for news articles
+    news_list = lv_list_create(screen);
+    lv_obj_set_size(news_list, 300, 220);
+    lv_obj_align(news_list, LV_ALIGN_BOTTOM_MID, 0, -10);
+
+    // Initialize news API if not already done
+    news_api_init();
+
+    // Check if we need an API key
+    // NOTE: Users need to get a free API key from https://newsapi.org
+    // For now, using a placeholder - users should replace this with their own key
+    const char *api_key = "YOUR_API_KEY_HERE";
+
+    // Check if API key is configured
+    if (strcmp(api_key, "YOUR_API_KEY_HERE") == 0) {
+        lv_label_set_text(news_status_label,
+                         "Please configure NewsAPI key\n"
+                         "Get free key at:\n"
+                         "newsapi.org");
+        lv_list_add_text(news_list, "API key not configured");
+    } else {
+        lv_label_set_text(news_status_label, "Loading news...");
+        lv_list_add_text(news_list, "Fetching latest headlines...");
+
+        // Start fetching news (country code: us = United States)
+        news_api_fetch_headlines(api_key, "us");
+
+        // Start update timer (check every 500ms)
+        if (news_update_timer != NULL) {
+            lv_timer_del(news_update_timer);
+        }
+        news_update_timer = lv_timer_create(news_update_timer_cb, 500, NULL);
+    }
+
+    return screen;
 }

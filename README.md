@@ -33,6 +33,8 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 - **Core1 Execution**: BLE operations run on dedicated core for non-blocking performance
 
 ### User Interface
+- **Application Menu**: Main screen with list of available applications
+- **News Feed**: Real-time news headlines via NewsAPI integration
 - **WiFi Setup Flow**: Guided network selection and password entry
 - **BLE Scan Screen**: Dynamic device discovery with real-time updates
 - **SPS Data Screen**: Send/receive interface for Serial Port Service communication
@@ -59,11 +61,15 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 │   ├── main.c                       # Main application entry point
 │   ├── ui_screens.c                 # UI state machine and screen definitions
 │   ├── wifi_config.c                # WiFi management and flash persistence
+│   ├── ble_config.c                 # BLE connectivity and SPS support
+│   ├── news_api.c                   # NewsAPI HTTP client for fetching headlines
 │   ├── lv_port_disp_picocalc_ILI9488.c  # DMA-accelerated display driver for ILI9488
 │   └── lv_port_indev_picocalc_kb.c  # I2C keyboard input driver
 ├── include/                         # Header files
 │   ├── ui_screens.h
 │   ├── wifi_config.h
+│   ├── ble_config.h
+│   ├── news_api.h
 │   ├── lv_port_disp_picocalc_ILI9488.h
 │   └── lv_port_indev_picocalc_kb.h
 ├── lcdspi/                          # LCD SPI communication library (DMA support)
@@ -73,6 +79,23 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 ├── lv_conf.h                        # LVGL v9.3 configuration
 └── CMakeLists.txt                   # Build configuration
 ```
+
+## Configuration
+
+### NewsAPI Setup (Required for News Feed)
+
+The News Feed feature requires a free API key from NewsAPI:
+
+1. Visit [newsapi.org](https://newsapi.org) and sign up for a free account
+2. Copy your API key from the dashboard
+3. Edit `src/ui_screens.c` and find the `create_news_feed_screen()` function (around line 1225)
+4. Replace `YOUR_API_KEY_HERE` with your actual API key:
+   ```c
+   const char *api_key = "your_actual_api_key_here";
+   ```
+5. Rebuild the project
+
+**Note**: The free tier allows 100 requests per day, which is sufficient for testing and personal use.
 
 ## Build Instructions
 ```bash
@@ -154,8 +177,68 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ## Changelog
 
-### Version 0.0.6 - Current Development
-- Work in progress
+### Version 0.0.8 - Current Development
+
+#### New Features
+- **News Feed Application**: Added NewsAPI integration to fetch and display news headlines
+  - Main screen redesigned with application list interface
+  - Removed text input/output fields in favor of modular app structure
+  - News Feed displays top headlines with source attribution
+  - HTTP client implementation using lwIP TCP/IP stack
+  - Simple JSON parser for NewsAPI responses
+  - Automatic refresh with status indicators
+  - Configurable country and API key support
+  - Error handling with user-friendly messages
+
+#### UI Changes
+- **Main Screen Redesign**: Replaced text input/output with application launcher
+  - "Applications:" section with list of available apps
+  - News Feed button as first application
+  - Cleaner, more organized interface
+  - WiFi and BLE buttons remain in top-right corner
+
+#### Technical Additions
+- **NewsAPI Client** (`news_api.c/h`):
+  - Non-blocking HTTP requests via lwIP
+  - DNS resolution with fallback
+  - TCP client implementation
+  - JSON response parsing
+  - State machine for fetch status
+  - Support for up to 10 news articles
+- **Enhanced State Machine**: Added `APP_STATE_NEWS_FEED` state
+- **LVGL Timer Integration**: Automatic UI updates when news data arrives
+
+---
+
+### Version 0.0.7 - 2025-12-26
+
+#### BLE Features
+- **Implemented BLE connectivity with SPS support**
+  - Bluetooth Low Energy scanning and device discovery
+  - Serial Port Service (SPS) implementation
+  - Real-time device discovery during scanning
+  - SPS service auto-detection with [SPS] indicator
+  - Bi-directional data communication
+  - Connection management and error handling
+  - Core1 execution for non-blocking BLE operations
+
+#### Technical Implementation
+- Added `ble_config.c/h` for BLE functionality
+- BLE scan screen with dynamic device updates
+- SPS data screen for send/receive operations
+- 30-second scan window with automatic timeout
+- Support for Nordic UART Service (NUS) and u-blox SPS
+
+---
+
+### Version 0.0.6 - 2025-12-26
+
+#### Documentation
+- **Improved README.md**
+  - Enhanced feature descriptions
+  - Better documentation structure
+  - Updated build instructions
+  - Added technical details
 
 ---
 
