@@ -26,6 +26,11 @@ static char s_width;
 int lcd_char_pos = 0;
 unsigned char lcd_buffer[320 * 3] = {0};// 1440 = 480*3, 320*3 = 960
 
+// DMA support for fast SPI transfers
+static int dma_tx_channel = -1;
+static uint8_t *dma_buffer = NULL;
+static size_t dma_buffer_size = 0;
+
 void __not_in_flash_func(spi_write_fast)(spi_inst_t *spi, const uint8_t *src, size_t len) {
     // Write to TX FIFO whilst ignoring RX, then clean up afterward. When RX
     // is full, PL022 inhibits RX pushes, and sets a sticky flag on
@@ -137,9 +142,8 @@ void read_buffer_spi(int x1, int y1, int x2, int y2, unsigned char *p) {
 }
 
 void draw_buffer_spi(int x1, int y1, int x2, int y2, unsigned char *p) {
-    int i, t;
-    unsigned char q[3];
-    
+    int t;
+
     // Boundary checking
     if (x2 <= x1) {
         t = x1;
@@ -159,39 +163,78 @@ void draw_buffer_spi(int x1, int y1, int x2, int y2, unsigned char *p) {
     if (y1 >= vres) y1 = vres - 1;
     if (y2 < 0) y2 = 0;
     if (y2 >= vres) y2 = vres - 1;
-    
+
     // Calculate total number of pixels
     int pixelCount = (x2 - x1 + 1) * (y2 - y1 + 1);
+    size_t rgb888_size = pixelCount * 3;
     uint16_t *pixelBuffer = (uint16_t *)p;
-    
-    define_region_spi(x1, y1, x2, y2, 1);
-    
-    for (i = 0; i < pixelCount; i++) {
-        uint16_t pixel = pixelBuffer[i];
-        
-        // Extract RGB565 components
-        uint8_t r5 = (pixel >> 11) & 0x1F;
-        uint8_t g6 = (pixel >> 5) & 0x3F;
-        uint8_t b5 = pixel & 0x1F;
-        
-        // Convert to 8-bit values (scaling approximation)
-        uint8_t r8 = (r5 << 3) | (r5 >> 2);
-        uint8_t g8 = (g6 << 2) | (g6 >> 4);
-        uint8_t b8 = (b5 << 3) | (b5 >> 2);
-        
+
 #ifdef ILI9488
-        // Convert each RGB565 pixel to RGB888 (3 bytes per pixel) for ILI9488
-        uint8_t rgb[3];
-        rgb[0] = r8;  // Red
-        rgb[1] = g8;  // Green
-        rgb[2] = b8;  // Blue
-        hw_send_spi(rgb, 3);
-#else
-        // For other controllers or if using 16-bit mode, retain the original conversion
-        hw_send_spi(q, 2);
-#endif
+    // Use DMA-accelerated transfer if available and buffer fits
+    if (dma_tx_channel >= 0 && dma_buffer != NULL && rgb888_size <= dma_buffer_size) {
+        // Batch convert RGB565 to RGB888 in DMA buffer
+        for (int i = 0; i < pixelCount; i++) {
+            uint16_t pixel = pixelBuffer[i];
+
+            // Extract RGB565 components and expand to RGB888
+            uint8_t r5 = (pixel >> 11) & 0x1F;
+            uint8_t g6 = (pixel >> 5) & 0x3F;
+            uint8_t b5 = pixel & 0x1F;
+
+            dma_buffer[i * 3]     = (r5 << 3) | (r5 >> 2);  // Red
+            dma_buffer[i * 3 + 1] = (g6 << 2) | (g6 >> 4);  // Green
+            dma_buffer[i * 3 + 2] = (b5 << 3) | (b5 >> 2);  // Blue
+        }
+
+        define_region_spi(x1, y1, x2, y2, 1);
+
+        // Configure DMA channel for SPI transfer
+        dma_channel_config c = dma_channel_get_default_config(dma_tx_channel);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+        channel_config_set_dreq(&c, spi_get_dreq(Pico_LCD_SPI_MOD, true));
+
+        // Start DMA transfer
+        dma_channel_configure(
+            dma_tx_channel,
+            &c,
+            &spi_get_hw(Pico_LCD_SPI_MOD)->dr,  // Write to SPI TX FIFO
+            dma_buffer,                           // Read from buffer
+            rgb888_size,                          // Transfer count
+            true                                  // Start immediately
+        );
+
+        // Wait for DMA to complete
+        dma_channel_wait_for_finish_blocking(dma_tx_channel);
+
+        // Wait for SPI to finish transmitting
+        while (spi_is_busy(Pico_LCD_SPI_MOD)) tight_loop_contents();
+
+    } else {
+        // Fallback to non-DMA transfer (for large buffers or if DMA not available)
+        define_region_spi(x1, y1, x2, y2, 1);
+
+        for (int i = 0; i < pixelCount; i++) {
+            uint16_t pixel = pixelBuffer[i];
+
+            // Extract RGB565 components
+            uint8_t r5 = (pixel >> 11) & 0x1F;
+            uint8_t g6 = (pixel >> 5) & 0x3F;
+            uint8_t b5 = pixel & 0x1F;
+
+            // Convert to RGB888
+            uint8_t rgb[3];
+            rgb[0] = (r5 << 3) | (r5 >> 2);  // Red
+            rgb[1] = (g6 << 2) | (g6 >> 4);  // Green
+            rgb[2] = (b5 << 3) | (b5 >> 2);  // Blue
+            hw_send_spi(rgb, 3);
+        }
     }
-    
+#else
+    // For non-ILI9488 displays (original 16-bit mode)
+    define_region_spi(x1, y1, x2, y2, 1);
+    hw_send_spi(p, pixelCount * 2);
+#endif
+
     lcd_spi_raise_cs();
 }
 
@@ -713,6 +756,19 @@ void lcd_spi_init() {
     gpio_set_function(Pico_LCD_TX, GPIO_FUNC_SPI);
     gpio_set_function(Pico_LCD_RX, GPIO_FUNC_SPI);
     gpio_set_input_hysteresis_enabled(Pico_LCD_RX, true);
+
+    // Initialize DMA for fast SPI transfers
+    dma_tx_channel = dma_claim_unused_channel(true);
+
+    // Allocate DMA buffer for RGB888 conversion (160 rows max)
+    dma_buffer_size = 320 * 160 * 3; // 153,600 bytes
+    dma_buffer = (uint8_t *)malloc(dma_buffer_size);
+
+    if (dma_buffer == NULL) {
+        printf("ERROR: Failed to allocate DMA buffer\n");
+    } else {
+        printf("DMA initialized: channel=%d, buffer=%d bytes\n", dma_tx_channel, dma_buffer_size);
+    }
 
     gpio_put(Pico_LCD_CS, 1);
     gpio_put(Pico_LCD_RST, 1);

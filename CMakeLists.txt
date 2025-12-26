@@ -93,7 +93,7 @@ target_link_libraries(picocalc_omnitool
   hardware_pwm
   hardware_i2c
   hardware_spi
-  hardware_dma
+  hardware_dma      # Required for DMA-accelerated display updates
   hardware_exception
   hardware_pio
   pico_multicore

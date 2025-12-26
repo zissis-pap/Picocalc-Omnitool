@@ -2,10 +2,11 @@
 #define LCDSPI_H
 #include "pico/multicore.h"
 #include <hardware/spi.h>
+#include <hardware/dma.h>
 
 //#define LCD_SPI_SPEED   6000000
-#define LCD_SPI_SPEED   25000000
-//#define LCD_SPI_SPEED 50000000
+//#define LCD_SPI_SPEED   25000000
+#define LCD_SPI_SPEED   50000000  // Increased for RP2350 performance
 
 #define Pico_LCD_SCK 10 //
 #define Pico_LCD_TX  11 // MOSI

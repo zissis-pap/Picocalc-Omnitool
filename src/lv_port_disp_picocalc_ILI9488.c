@@ -66,9 +66,9 @@ void lv_port_disp_init(void)
     lv_display_t * disp = lv_display_create(MY_DISP_HOR_RES, MY_DISP_VER_RES);
     lv_display_set_flush_cb(disp, disp_flush);
 
-    /* One buffer for partial rendering */
+    /* One buffer for partial rendering - 160 rows for better performance on RP2350 */
     LV_ATTRIBUTE_MEM_ALIGN
-    static uint8_t buf_1[MY_DISP_HOR_RES * 10 * BYTE_PER_PIXEL];            /*A buffer for 10 rows*/
+    static uint8_t buf_1[MY_DISP_HOR_RES * 160 * BYTE_PER_PIXEL];          /*A buffer for 160 rows (~102 KB)*/
     lv_display_set_buffers(disp, buf_1, NULL, sizeof(buf_1), LV_DISPLAY_RENDER_MODE_PARTIAL);
 }
 
