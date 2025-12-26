@@ -140,30 +140,12 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ## Changelog
 
-### Version 0.0.4 - 2025-12-26
+### Version 0.0.6 - Current Development
+- Work in progress
 
-#### Project Organization
-- **Renamed project** from "pico_lvgl_display_demo" to "Picocalc-Omnitool"
-- **Reorganized file structure**: Moved source files to `src/` and headers to `include/`
-- **Simplified version display**: Main screen now shows only version number (e.g., "v0.0.4") instead of full build info
-- **Automated version strings**: `VERSION_STRING` and `FULL_VERSION_STRING` now auto-generate from `APP_VERSION_MAJOR/MINOR/PATCH` defines
+---
 
-#### LVGL & Dependencies
-- **Converted LVGL to git submodule**: Replaced manually copied files with proper submodule management
-  - Repository: https://github.com/lvgl/lvgl.git
-  - Branch: release/v9.3
-  - Commit: c033a98afddd65aaafeebea625382a94020fe4a7
-- **Updated lv_conf.h**: Replaced v8.3.0 configuration with v9.3.0 template for compatibility
-- **Fixed include paths**: Changed from `#include "lvgl/lvgl.h"` to `#include "lvgl.h"` throughout codebase
-
-#### WiFi Features
-- **Added Skip button**: Users can now skip WiFi configuration and go directly to main app
-  - Skip button appears on all WiFi scan screen states (scanning, no networks, networks found)
-  - Positioned at bottom of screen for easy access
-- **Fixed WiFi rescan issue**: Resolved bug where rescanning didn't return/display networks
-  - Added check to prevent starting new scan while one is already active
-  - Improved state management and debug logging
-  - Enhanced scan completion detection and screen updates
+### Version 0.0.5 - 2025-12-26
 
 #### Display Performance Optimizations (RP2350)
 - **Increased LVGL buffer**: Expanded from 10 rows (6.4 KB) to 160 rows (~102 KB)
@@ -183,6 +165,51 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 #### Build System
 - **Added hardware_dma library** to CMakeLists.txt for DMA support
+
+#### Technical Improvements
+- Optimized RGB565 to RGB888 color conversion (batch vs per-pixel)
+
+#### Known Issues
+- If display shows visual artifacts at 50 MHz SPI, reduce to 40 MHz in `lcdspi/lcdspi.h`
+- DMA buffer limited to 153 KB (supports up to 160 rows); larger updates use fallback mode
+
+---
+
+### Version 0.0.4 - 2025-12-26
+
+#### WiFi Features
+- **Added Skip button**: Users can now skip WiFi configuration and go directly to main app
+  - Skip button appears on all WiFi scan screen states (scanning, no networks, networks found)
+  - Positioned at bottom of screen for easy access
+- **Fixed WiFi rescan issue**: Resolved bug where rescanning didn't return/display networks
+  - Added check to prevent starting new scan while one is already active
+  - Improved state management and debug logging
+  - Enhanced scan completion detection and screen updates
+
+#### Technical Improvements
+- Added extensive debug logging for WiFi scan operations
+- Improved error handling for WiFi scanning failures
+- Enhanced state machine robustness with better state transitions
+
+---
+
+### Version 0.0.3 - 2025-12-26
+
+#### Project Organization
+- **Renamed project** from "pico_lvgl_display_demo" to "Picocalc-Omnitool"
+- **Reorganized file structure**: Moved source files to `src/` and headers to `include/`
+- **Simplified version display**: Main screen now shows only version number (e.g., "v0.0.3") instead of full build info
+- **Automated version strings**: `VERSION_STRING` and `FULL_VERSION_STRING` now auto-generate from `APP_VERSION_MAJOR/MINOR/PATCH` defines
+
+#### LVGL & Dependencies
+- **Converted LVGL to git submodule**: Replaced manually copied files with proper submodule management
+  - Repository: https://github.com/lvgl/lvgl.git
+  - Branch: release/v9.3
+  - Commit: c033a98afddd65aaafeebea625382a94020fe4a7
+- **Updated lv_conf.h**: Replaced v8.3.0 configuration with v9.3.0 template for compatibility
+- **Fixed include paths**: Changed from `#include "lvgl/lvgl.h"` to `#include "lvgl.h"` throughout codebase
+
+#### Build System
 - **Configured for Ninja**: Build system properly set up for Ninja generator
 - **Updated .gitignore**: Comprehensive exclusions for build artifacts and dependencies
 
@@ -192,19 +219,9 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 - Fixed build system issues with Ninja generator expectations
 - Corrected config file placement (kept in root as required by build system)
 
-#### Technical Improvements
-- Added extensive debug logging for WiFi scan operations
-- Improved error handling for WiFi scanning failures
-- Enhanced state machine robustness with better state transitions
-- Optimized RGB565 to RGB888 color conversion (batch vs per-pixel)
-
-#### Known Issues
-- If display shows visual artifacts at 50 MHz SPI, reduce to 40 MHz in `lcdspi/lcdspi.h`
-- DMA buffer limited to 153 KB (supports up to 160 rows); larger updates use fallback mode
-
 ---
 
-### Version 0.0.3 and earlier
+### Version 0.0.2 and earlier
 Initial development versions with basic WiFi and LVGL functionality.
 
 ## Special thanks

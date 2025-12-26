@@ -30,15 +30,18 @@ void ui_init(ui_context_t *ctx) {
 }
 
 // Transition to a new state
-void transition_to_state(ui_context_t *ctx, app_state_t new_state) {
+void transition_to_state(ui_context_t *ctx, app_state_t new_state) 
+{
     // Delete old screen
-    if (ctx->current_screen != NULL) {
+    if (ctx->current_screen != NULL) 
+    {
         lv_obj_del(ctx->current_screen);
         ctx->current_screen = NULL;
     }
 
     // Create new screen based on state
-    switch (new_state) {
+    switch (new_state) 
+    {
         case APP_STATE_INIT:
             ctx->current_screen = create_splash_screen(ctx);
             break;
@@ -62,7 +65,8 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state) {
             return;
     }
 
-    if (ctx->current_screen != NULL) {
+    if (ctx->current_screen != NULL) 
+    {
         lv_scr_load(ctx->current_screen);
     }
 
@@ -70,12 +74,14 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state) {
 }
 
 // Get current state
-app_state_t get_current_state(ui_context_t *ctx) {
+app_state_t get_current_state(ui_context_t *ctx) 
+{
     return ctx->current_state;
 }
 
 // Create splash screen
-lv_obj_t* create_splash_screen(ui_context_t *ctx) {
+lv_obj_t* create_splash_screen(ui_context_t *ctx) 
+{
     lv_obj_t *screen = lv_obj_create(NULL);
 
     lv_obj_t *label = lv_label_create(screen);
@@ -86,7 +92,8 @@ lv_obj_t* create_splash_screen(ui_context_t *ctx) {
 }
 
 // Create WiFi scan screen
-lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) {
+lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) 
+{
     lv_obj_t *screen = lv_obj_create(NULL);
 
     // Title
@@ -97,7 +104,8 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) {
     // Scanning status
     lv_obj_t *scan_label = lv_label_create(screen);
 
-    if (!ctx->scan_state.scan_complete) {
+    if (!ctx->scan_state.scan_complete) 
+    {
         lv_label_set_text(scan_label, "Scanning...");
         lv_obj_align(scan_label, LV_ALIGN_CENTER, 0, -30);
 
@@ -115,7 +123,9 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) {
         lv_obj_t *skip_label = lv_label_create(skip_btn);
         lv_label_set_text(skip_label, "Skip");
         lv_obj_center(skip_label);
-    } else if (ctx->scan_state.count == 0) {
+    } 
+    else if (ctx->scan_state.count == 0) 
+    {
         lv_label_set_text(scan_label, "No networks found");
         lv_obj_align(scan_label, LV_ALIGN_CENTER, 0, -40);
 
@@ -138,7 +148,9 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) {
         lv_obj_t *skip_label = lv_label_create(skip_btn);
         lv_label_set_text(skip_label, "Skip");
         lv_obj_center(skip_label);
-    } else {
+    } 
+    else 
+    {
         // Create dropdown with network list
         lv_obj_t *dropdown = lv_dropdown_create(screen);
         lv_obj_set_width(dropdown, 280);
@@ -146,7 +158,8 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) {
 
         // Build network list string
         char network_list[MAX_SCAN_RESULTS * 40] = {0};
-        for (int i = 0; i < ctx->scan_state.count; i++) {
+        for (int i = 0; i < ctx->scan_state.count; i++) 
+        {
             if (i > 0) strcat(network_list, "\n");
 
             char network_entry[40];
@@ -203,7 +216,8 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) {
 }
 
 // Create password entry screen
-lv_obj_t* create_password_screen(ui_context_t *ctx) {
+lv_obj_t* create_password_screen(ui_context_t *ctx) 
+{
     lv_obj_t *screen = lv_obj_create(NULL);
 
     // Title with SSID
@@ -212,7 +226,8 @@ lv_obj_t* create_password_screen(ui_context_t *ctx) {
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
 
     // Check if network is open (no password required)
-    if (ctx->selected_auth == CYW43_AUTH_OPEN) {
+    if (ctx->selected_auth == CYW43_AUTH_OPEN) 
+    {
         lv_obj_t *open_label = lv_label_create(screen);
         lv_label_set_text(open_label, "Open network\n(no password)");
         lv_obj_align(open_label, LV_ALIGN_CENTER, 0, -30);
@@ -226,7 +241,9 @@ lv_obj_t* create_password_screen(ui_context_t *ctx) {
         lv_obj_t *btn_label = lv_label_create(connect_btn);
         lv_label_set_text(btn_label, "Connect");
         lv_obj_center(btn_label);
-    } else {
+    } 
+    else 
+    {
         // Password textarea
         password_ta = lv_textarea_create(screen);
         lv_obj_set_size(password_ta, 280, 40);
@@ -283,7 +300,8 @@ lv_obj_t* create_password_screen(ui_context_t *ctx) {
 }
 
 // Create connecting screen
-lv_obj_t* create_connecting_screen(ui_context_t *ctx) {
+lv_obj_t* create_connecting_screen(ui_context_t *ctx) 
+{
     lv_obj_t *screen = lv_obj_create(NULL);
 
     // Title
@@ -308,7 +326,8 @@ lv_obj_t* create_connecting_screen(ui_context_t *ctx) {
 }
 
 // Create error screen
-lv_obj_t* create_error_screen(ui_context_t *ctx) {
+lv_obj_t* create_error_screen(ui_context_t *ctx) 
+{
     lv_obj_t *screen = lv_obj_create(NULL);
 
     // Title
@@ -347,7 +366,8 @@ lv_obj_t* create_error_screen(ui_context_t *ctx) {
 }
 
 // Create main app screen (original UI with settings button added)
-lv_obj_t* create_main_app_screen(ui_context_t *ctx) {
+lv_obj_t* create_main_app_screen(ui_context_t *ctx) 
+{
     lv_obj_t *screen = lv_obj_create(NULL);
 
     // Title with version info
@@ -360,9 +380,12 @@ lv_obj_t* create_main_app_screen(ui_context_t *ctx) {
     lv_obj_t *wifi_status = lv_label_create(screen);
     bool is_connected = wifi_is_connected();
 
-    if (is_connected) {
+    if (is_connected) 
+    {
         lv_label_set_text_fmt(wifi_status, "WiFi: %s", ctx->config.ssid);
-    } else {
+    } 
+    else 
+    {
         lv_label_set_text(wifi_status, "WiFi: Disconnected");
     }
     lv_obj_align(wifi_status, LV_ALIGN_TOP_LEFT, 5, 25);
@@ -394,21 +417,26 @@ lv_obj_t* create_main_app_screen(ui_context_t *ctx) {
 }
 
 // Update connection status
-void update_connection_status(ui_context_t *ctx, const char *status) {
-    if (status_label != NULL) {
+void update_connection_status(ui_context_t *ctx, const char *status) 
+{
+    if (status_label != NULL) 
+    {
         lv_label_set_text(status_label, status);
     }
 }
 
 // Show error message
-void show_error_message(ui_context_t *ctx, error_type_t error) {
+void show_error_message(ui_context_t *ctx, error_type_t error) 
+{
     ctx->last_error = error;
     transition_to_state(ctx, APP_STATE_WIFI_ERROR);
 }
 
 // Get error message string
-const char* get_error_message(error_type_t error) {
-    switch (error) {
+const char* get_error_message(error_type_t error) 
+{
+    switch (error) 
+    {
         case ERROR_SCAN_FAILED:
             return "Failed to scan for networks.\nPlease try again.";
         case ERROR_NO_NETWORKS:
@@ -427,28 +455,34 @@ const char* get_error_message(error_type_t error) {
 }
 
 // Event handler: Network selected from dropdown
-static void network_selected_event(lv_event_t *e) {
+static void network_selected_event(lv_event_t *e) 
+{
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
     lv_obj_t *target = lv_event_get_target(e);
     lv_obj_t *dropdown;
 
     // Check if event came from button (Connect button has dropdown in user_data)
     // or directly from dropdown
-    if (lv_obj_check_type(target, &lv_button_class)) {
+    if (lv_obj_check_type(target, &lv_button_class)) 
+    {
         // Event from Connect button - get dropdown from button's user_data
         dropdown = (lv_obj_t *)lv_obj_get_user_data(target);
-    } else {
+    } 
+    else 
+    {
         // Event directly from dropdown
         dropdown = target;
     }
 
-    if (dropdown == NULL) {
+    if (dropdown == NULL) 
+    {
         return;
     }
 
     uint16_t selected = lv_dropdown_get_selected(dropdown);
 
-    if (selected < ctx->scan_state.count) {
+    if (selected < ctx->scan_state.count) 
+    {
         // Store selected network info
         strncpy(ctx->selected_ssid, ctx->scan_state.results[selected].ssid, WIFI_SSID_MAX_LEN);
         ctx->selected_ssid[WIFI_SSID_MAX_LEN] = '\0';
@@ -460,7 +494,8 @@ static void network_selected_event(lv_event_t *e) {
 }
 
 // Event handler: Rescan button
-static void rescan_btn_event(lv_event_t *e) {
+static void rescan_btn_event(lv_event_t *e) 
+{
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
     printf("Rescan button clicked\n");
@@ -474,15 +509,19 @@ static void rescan_btn_event(lv_event_t *e) {
 }
 
 // Event handler: Connect button
-static void connect_btn_event(lv_event_t *e) {
+static void connect_btn_event(lv_event_t *e) 
+{
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
     // Get password from textarea (if not open network)
-    if (ctx->selected_auth != CYW43_AUTH_OPEN && password_ta != NULL) {
+    if (ctx->selected_auth != CYW43_AUTH_OPEN && password_ta != NULL) 
+    {
         const char *password = lv_textarea_get_text(password_ta);
         strncpy(ctx->config.password, password, WIFI_PASS_MAX_LEN);
         ctx->config.password[WIFI_PASS_MAX_LEN] = '\0';
-    } else {
+    } 
+    else 
+    {
         ctx->config.password[0] = '\0';  // Empty password for open networks
     }
 
@@ -500,11 +539,13 @@ static void connect_btn_event(lv_event_t *e) {
 }
 
 // Event handler: Cancel button
-static void cancel_btn_event(lv_event_t *e) {
+static void cancel_btn_event(lv_event_t *e) 
+{
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
     // Clear password for security
-    if (password_ta != NULL) {
+    if (password_ta != NULL) 
+    {
         lv_textarea_set_text(password_ta, "");
     }
 
@@ -513,17 +554,20 @@ static void cancel_btn_event(lv_event_t *e) {
 }
 
 // Event handler: Show password checkbox
-static void show_password_checkbox_event(lv_event_t *e) {
+static void show_password_checkbox_event(lv_event_t *e) 
+{
     lv_obj_t *checkbox = lv_event_get_target(e);
     bool checked = lv_obj_get_state(checkbox) & LV_STATE_CHECKED;
 
-    if (password_ta != NULL) {
+    if (password_ta != NULL) 
+    {
         lv_textarea_set_password_mode(password_ta, !checked);
     }
 }
 
 // Event handler: Retry button on error screen
-static void retry_btn_event(lv_event_t *e) {
+static void retry_btn_event(lv_event_t *e) 
+{
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
     // Return to password screen to retry
@@ -531,7 +575,8 @@ static void retry_btn_event(lv_event_t *e) {
 }
 
 // Event handler: Choose different network button
-static void choose_different_btn_event(lv_event_t *e) {
+static void choose_different_btn_event(lv_event_t *e) 
+{
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
     // Return to scan screen
@@ -539,7 +584,8 @@ static void choose_different_btn_event(lv_event_t *e) {
 }
 
 // Event handler: Settings button
-static void settings_btn_event(lv_event_t *e) {
+static void settings_btn_event(lv_event_t *e) 
+{
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
     // Create settings modal using basic message box
@@ -559,11 +605,13 @@ static void settings_btn_event(lv_event_t *e) {
 }
 
 // Event handler: Forget network (reconfigure)
-static void forget_network_event(lv_event_t *e) {
+static void forget_network_event(lv_event_t *e) 
+{
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
     lv_obj_t *btn = lv_event_get_target(e);
 
-    if (ctx != NULL) {  // Reconfigure button
+    if (ctx != NULL) 
+    {  // Reconfigure button
         // Erase saved config
         wifi_config_erase();
 
@@ -581,28 +629,35 @@ static void forget_network_event(lv_event_t *e) {
 
         // Close message box - navigate up to find the msgbox
         lv_obj_t *mbox = btn;
-        while (mbox && !lv_obj_check_type(mbox, &lv_msgbox_class)) {
+        while (mbox && !lv_obj_check_type(mbox, &lv_msgbox_class)) 
+        {
             mbox = lv_obj_get_parent(mbox);
         }
-        if (mbox) {
+        if (mbox) 
+        {
             lv_msgbox_close(mbox);
         }
 
         transition_to_state(ctx, APP_STATE_WIFI_SCAN);
-    } else {  // Cancel button
+    } 
+    else 
+    {  // Cancel button
         // Close message box
         lv_obj_t *mbox = btn;
-        while (mbox && !lv_obj_check_type(mbox, &lv_msgbox_class)) {
+        while (mbox && !lv_obj_check_type(mbox, &lv_msgbox_class)) 
+        {
             mbox = lv_obj_get_parent(mbox);
         }
-        if (mbox) {
+        if (mbox) 
+        {
             lv_msgbox_close(mbox);
         }
     }
 }
 
 // Event handler: Skip WiFi connection
-static void skip_btn_event(lv_event_t *e) {
+static void skip_btn_event(lv_event_t *e) 
+{
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
     printf("Skipping WiFi connection\n");

@@ -6,7 +6,8 @@
 #include "hardware/sync.h"
 
 // CRC32 lookup table
-static const uint32_t crc32_table[256] = {
+static const uint32_t crc32_table[256] = 
+{
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f, 0xe963a535, 0x9e6495a3,
     0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988, 0x09b64c2b, 0x7eb17cbd, 0xe7b82d07, 0x90bf1d91,
     0x1db71064, 0x6ab020f2, 0xf3b97148, 0x84be41de, 0x1adad47d, 0x6ddde4eb, 0xf4d4b551, 0x83d385c7,
@@ -42,21 +43,25 @@ static const uint32_t crc32_table[256] = {
 };
 
 // Calculate CRC32 checksum
-uint32_t calculate_crc32(const uint8_t *data, size_t length) {
+uint32_t calculate_crc32(const uint8_t *data, size_t length) 
+{
     uint32_t crc = 0xFFFFFFFF;
-    for (size_t i = 0; i < length; i++) {
+    for (size_t i = 0; i < length; i++) 
+    {
         crc = crc32_table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
     }
     return ~crc;
 }
 
 // Load WiFi configuration from flash
-bool wifi_config_load(wifi_config_t *config) {
+bool wifi_config_load(wifi_config_t *config) 
+{
     const wifi_config_t *flash_config =
         (const wifi_config_t *)(XIP_BASE + WIFI_CONFIG_FLASH_OFFSET);
 
     // Check magic number
-    if (flash_config->magic != WIFI_CONFIG_MAGIC) {
+    if (flash_config->magic != WIFI_CONFIG_MAGIC) 
+    {
         printf("No valid WiFi config in flash (magic: 0x%08X)\n", flash_config->magic);
         return false;
     }
@@ -64,7 +69,8 @@ bool wifi_config_load(wifi_config_t *config) {
     // Validate CRC32
     uint32_t calc_crc = calculate_crc32((const uint8_t*)flash_config,
                                         sizeof(wifi_config_t) - sizeof(uint32_t));
-    if (calc_crc != flash_config->crc32) {
+    if (calc_crc != flash_config->crc32) 
+    {
         printf("WiFi config CRC mismatch (calculated: 0x%08X, stored: 0x%08X)\n",
                calc_crc, flash_config->crc32);
         return false;
@@ -77,7 +83,8 @@ bool wifi_config_load(wifi_config_t *config) {
 }
 
 // Flash write callback (called from flash_safe_execute)
-static void __no_inline_not_in_flash_func(flash_write_impl)(void *param) {
+static void __no_inline_not_in_flash_func(flash_write_impl)(void *param) 
+{
     wifi_config_t *config = (wifi_config_t *)param;
 
     // Erase the sector
@@ -88,7 +95,8 @@ static void __no_inline_not_in_flash_func(flash_write_impl)(void *param) {
 }
 
 // Save WiFi configuration to flash
-bool wifi_config_save(const wifi_config_t *config) {
+bool wifi_config_save(const wifi_config_t *config) 
+{
     // Create a copy with calculated CRC
     wifi_config_t config_copy;
     memcpy(&config_copy, config, sizeof(wifi_config_t));
@@ -101,7 +109,8 @@ bool wifi_config_save(const wifi_config_t *config) {
 
     // Retry up to 3 times
     const int MAX_RETRIES = 3;
-    for (int retry = 0; retry < MAX_RETRIES; retry++) {
+    for (int retry = 0; retry < MAX_RETRIES; retry++) 
+    {
         // Disable interrupts during flash operation
         uint32_t ints = save_and_disable_interrupts();
 
@@ -114,7 +123,8 @@ bool wifi_config_save(const wifi_config_t *config) {
         // Verify the write
         wifi_config_t verify;
         if (wifi_config_load(&verify) &&
-            strcmp(verify.ssid, config_copy.ssid) == 0) {
+            strcmp(verify.ssid, config_copy.ssid) == 0) 
+        {
             printf("WiFi config saved successfully\n");
             return true;
         }
@@ -141,10 +151,12 @@ void wifi_config_erase(void) {
 static wifi_scan_state_t *g_scan_state = NULL;
 
 // WiFi scan result callback
-static int scan_result_callback(void *env, const cyw43_ev_scan_result_t *result) {
+static int scan_result_callback(void *env, const cyw43_ev_scan_result_t *result) 
+{
     wifi_scan_state_t *state = (wifi_scan_state_t *)env;
 
-    if (result && state->count < MAX_SCAN_RESULTS && result->ssid_len > 0) {
+    if (result && state->count < MAX_SCAN_RESULTS && result->ssid_len > 0) 
+    {
         // Copy SSID
         size_t copy_len = result->ssid_len < 32 ? result->ssid_len : 32;
         memcpy(state->results[state->count].ssid, result->ssid, copy_len);
@@ -161,9 +173,11 @@ static int scan_result_callback(void *env, const cyw43_ev_scan_result_t *result)
 }
 
 // Start WiFi scan
-bool wifi_start_scan(wifi_scan_state_t *state) {
+bool wifi_start_scan(wifi_scan_state_t *state) 
+{
     // Check if a scan is already active
-    if (cyw43_wifi_scan_active(&cyw43_state)) {
+    if (cyw43_wifi_scan_active(&cyw43_state)) 
+    {
         printf("Scan already in progress, cannot start new scan\n");
         state->scan_error = true;
         return false;
@@ -177,7 +191,8 @@ bool wifi_start_scan(wifi_scan_state_t *state) {
     cyw43_wifi_scan_options_t scan_options = {0};
     int result = cyw43_wifi_scan(&cyw43_state, &scan_options, state, scan_result_callback);
 
-    if (result != 0) {
+    if (result != 0) 
+    {
         printf("Failed to start WiFi scan: %d\n", result);
         state->scan_error = true;
         return false;
@@ -188,14 +203,17 @@ bool wifi_start_scan(wifi_scan_state_t *state) {
 }
 
 // Wait for scan to complete
-bool wifi_wait_for_scan(wifi_scan_state_t *state, uint32_t timeout_ms) {
+bool wifi_wait_for_scan(wifi_scan_state_t *state, uint32_t timeout_ms) 
+{
     absolute_time_t timeout_time = make_timeout_time_ms(timeout_ms);
 
-    while (cyw43_wifi_scan_active(&cyw43_state)) {
+    while (cyw43_wifi_scan_active(&cyw43_state)) 
+    {
         cyw43_arch_poll();
         sleep_ms(100);
 
-        if (time_reached(timeout_time)) {
+        if (time_reached(timeout_time)) 
+        {
             printf("WiFi scan timeout\n");
             state->scan_error = true;
             return false;
@@ -208,14 +226,16 @@ bool wifi_wait_for_scan(wifi_scan_state_t *state, uint32_t timeout_ms) {
 }
 
 // Comparison function for qsort (sort by RSSI descending)
-static int rssi_compare(const void *a, const void *b) {
+static int rssi_compare(const void *a, const void *b) 
+{
     const scan_result_t *ra = (const scan_result_t *)a;
     const scan_result_t *rb = (const scan_result_t *)b;
     return rb->rssi - ra->rssi; // Descending order (strongest first)
 }
 
 // Sort scan results by signal strength and remove duplicates
-void wifi_sort_scan_results(wifi_scan_state_t *state) {
+void wifi_sort_scan_results(wifi_scan_state_t *state) 
+{
     if (state->count == 0) return;
 
     // First, sort by RSSI (strongest first)
@@ -223,19 +243,24 @@ void wifi_sort_scan_results(wifi_scan_state_t *state) {
 
     // Remove duplicates, keeping the strongest signal for each SSID
     int write_idx = 0;
-    for (int read_idx = 0; read_idx < state->count; read_idx++) {
+    for (int read_idx = 0; read_idx < state->count; read_idx++) 
+    {
         // Check if this SSID already exists in the deduplicated list
         bool is_duplicate = false;
-        for (int check_idx = 0; check_idx < write_idx; check_idx++) {
-            if (strcmp(state->results[read_idx].ssid, state->results[check_idx].ssid) == 0) {
+        for (int check_idx = 0; check_idx < write_idx; check_idx++) 
+        {
+            if (strcmp(state->results[read_idx].ssid, state->results[check_idx].ssid) == 0) 
+            {
                 is_duplicate = true;
                 break;
             }
         }
 
         // If not duplicate, keep it
-        if (!is_duplicate) {
-            if (write_idx != read_idx) {
+        if (!is_duplicate) 
+        {
+            if (write_idx != read_idx)
+            {
                 state->results[write_idx] = state->results[read_idx];
             }
             write_idx++;
@@ -246,10 +271,12 @@ void wifi_sort_scan_results(wifi_scan_state_t *state) {
 }
 
 // Connect to WiFi network
-bool wifi_connect_blocking(const char *ssid, const char *pass, uint32_t auth, uint32_t timeout_ms) {
+bool wifi_connect_blocking(const char *ssid, const char *pass, uint32_t auth, uint32_t timeout_ms) 
+{
     int result = cyw43_arch_wifi_connect_timeout_ms(ssid, pass, auth, timeout_ms);
 
-    if (result != 0) {
+    if (result != 0) 
+    {
         printf("WiFi connection failed (error %d)\n", result);
         return false;
     }
@@ -261,21 +288,25 @@ bool wifi_connect_blocking(const char *ssid, const char *pass, uint32_t auth, ui
 // Check if WiFi is connected
 // Note: link_status values: 0=DOWN, 1=JOIN, 2=NOIP, 3=UP
 // We consider 1+ as "connected" since JOIN means associated with AP
-bool wifi_is_connected(void) {
+bool wifi_is_connected(void) 
+{
     int link_status = cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
     return (link_status > 0);  // 1=JOIN, 2=NOIP, 3=UP all mean connected
 }
 
 // Disconnect from WiFi
-void wifi_disconnect(void) {
+void wifi_disconnect(void) 
+{
     printf("Disconnecting from WiFi\n");
     cyw43_arch_disable_sta_mode();
 }
 
 // Convert scan result auth mode (uint8_t) to connection auth mode (uint32_t)
 // Scan results use simple integer encoding, but connection needs full CYW43_AUTH_* constants
-uint32_t convert_scan_auth_to_connect_auth(uint8_t scan_auth) {
-    switch (scan_auth) {
+uint32_t convert_scan_auth_to_connect_auth(uint8_t scan_auth) 
+{
+    switch (scan_auth) 
+    {
         case 0: return CYW43_AUTH_OPEN;
         case 1: return CYW43_AUTH_OPEN;  // WEP - not supported, treat as open
         case 2: // WPA-PSK
@@ -294,8 +325,10 @@ uint32_t convert_scan_auth_to_connect_auth(uint8_t scan_auth) {
 }
 
 // Convert auth mode to string
-const char* wifi_auth_mode_to_string(uint32_t auth_mode) {
-    switch (auth_mode) {
+const char* wifi_auth_mode_to_string(uint32_t auth_mode) 
+{
+    switch (auth_mode) 
+    {
         case CYW43_AUTH_OPEN: return "Open";
         case CYW43_AUTH_WPA_TKIP_PSK: return "WPA";
         case CYW43_AUTH_WPA2_AES_PSK: return "WPA2";

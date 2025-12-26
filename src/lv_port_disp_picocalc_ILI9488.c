@@ -18,14 +18,14 @@
 /*********************
  *      DEFINES
  *********************/
-#define LV_DISP_ROT_NONE 0
+#define LV_DISP_ROT_NONE        0
 
 #ifndef MY_DISP_HOR_RES
-    #define MY_DISP_HOR_RES    320
+    #define MY_DISP_HOR_RES     320
 #endif
 
 #ifndef MY_DISP_VER_RES
-    #define MY_DISP_VER_RES    320
+    #define MY_DISP_VER_RES     320
 #endif
 
 #define BYTE_PER_PIXEL (LV_COLOR_FORMAT_GET_SIZE(LV_COLOR_FORMAT_RGB565)) /*will be 2 for RGB565 */
@@ -105,7 +105,8 @@ void disp_disable_update(void)
  *'lv_display_flush_ready()' has to be called when it's finished.*/
 static void disp_flush(lv_display_t * disp_drv, const lv_area_t * area, uint8_t * px_map)
 {
-    if(disp_flush_enabled) {
+    if(disp_flush_enabled) 
+    {
         /* Use the lcdspi function to transfer the rendered area to the screen */
         draw_buffer_spi(area->x1, area->y1, area->x2, area->y2, px_map);
     }

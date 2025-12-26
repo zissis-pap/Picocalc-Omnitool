@@ -102,7 +102,8 @@ static void keypad_read(lv_indev_t * indev_drv, lv_indev_data_t * data)
     static bool pending_release = false;
 
     /* Check if we need to send a release event for the previous key */
-    if(pending_release) {
+    if(pending_release) 
+    {
         data->state = LV_INDEV_STATE_RELEASED;
         data->key = last_key;
         pending_release = false;
@@ -113,7 +114,8 @@ static void keypad_read(lv_indev_t * indev_drv, lv_indev_data_t * data)
     int r = keypad_get_key();
     
     uint32_t act_key = 0;
-    if (r > 0) {
+    if (r > 0) 
+    {
         printf("Key event %x\n", r);
         
         /* Translate the keys to LVGL control characters according to your key definitions */
@@ -236,7 +238,9 @@ static void keypad_read(lv_indev_t * indev_drv, lv_indev_data_t * data)
         data->key = act_key;
         last_key = act_key;
         pending_release = true;
-    } else {
+    } 
+    else 
+    {
         data->state = LV_INDEV_STATE_RELEASED;
         data->key = 0;
     }
@@ -245,7 +249,8 @@ static void keypad_read(lv_indev_t * indev_drv, lv_indev_data_t * data)
 static int keypad_get_key(void)
 {   
     int key_code = read_i2c_kbd();
-    if (key_code < 0) {
+    if (key_code < 0) 
+    {
         return 0;
     }
     
