@@ -1,0 +1,24 @@
+#ifndef API_TOKENS_H
+#define API_TOKENS_H
+
+// =============================================================================
+// API TOKEN CONFIGURATION
+// =============================================================================
+//
+// This is a template file. To use it:
+// 1. Copy this file to api_tokens.h (in the same directory)
+// 2. Replace the placeholder values below with your actual API keys
+// 3. The api_tokens.h file is git-ignored and will not be committed
+//
+// =============================================================================
+
+// NewsAPI Configuration
+// Get your free API key at: https://newsapi.org
+#define NEWSAPI_KEY "YOUR_API_KEY_HERE"
+
+// Add other API tokens below as needed
+// Example:
+// #define OPENAI_API_KEY "your-openai-key-here"
+// #define WEATHER_API_KEY "your-weather-key-here"
+
+#endif // API_TOKENS_H

@@ -42,3 +42,6 @@ pico-sdk/
 # Python bytecode (if using Python tools)
 __pycache__/
 *.pyc
+
+# API tokens and secrets
+include/api_tokens.h

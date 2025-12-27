@@ -15,7 +15,7 @@ static news_data_t g_news_data = {0};
 static struct tcp_pcb *g_tcp_pcb = NULL;
 static ip_addr_t g_server_ip;
 static char g_request_buffer[512];
-static char g_response_buffer[4096];
+static char g_response_buffer[8192];
 static uint16_t g_response_len = 0;
 
 // Forward declarations
@@ -202,8 +202,21 @@ static void parse_news_response(const char *response, uint16_t len)
         if (search_pos == NULL) break;
 
         search_pos += 9; // Skip past "title":"
-        const char *title_end = strchr(search_pos, '"');
-        if (title_end == NULL) break;
+
+        // Find the end of the title string, handling escaped quotes
+        const char *title_end = search_pos;
+        while (*title_end != '\0') {
+            if (*title_end == '\\' && *(title_end + 1) != '\0') {
+                // Skip escaped character
+                title_end += 2;
+            } else if (*title_end == '"') {
+                // Found unescaped closing quote
+                break;
+            } else {
+                title_end++;
+            }
+        }
+        if (*title_end != '"') break;
 
         // Copy title
         int title_len = title_end - search_pos;
@@ -211,16 +224,125 @@ static void parse_news_response(const char *response, uint16_t len)
         strncpy(g_news_data.articles[g_news_data.count].title, search_pos, title_len);
         g_news_data.articles[g_news_data.count].title[title_len] = '\0';
 
-        // Try to find source name
-        const char *source_start = strstr(search_pos, "\"name\":\"");
-        if (source_start != NULL && source_start < search_pos + 200) {
+        // Clean up escaped characters in title
+        int write_pos = 0;
+        for (int read_pos = 0; read_pos < title_len; read_pos++) {
+            if (g_news_data.articles[g_news_data.count].title[read_pos] == '\\' &&
+                read_pos + 1 < title_len) {
+                char next = g_news_data.articles[g_news_data.count].title[read_pos + 1];
+                if (next == '"' || next == '\\' || next == '/') {
+                    // Skip the backslash, keep the escaped character
+                    g_news_data.articles[g_news_data.count].title[write_pos++] = next;
+                    read_pos++; // Skip the escaped char
+                } else {
+                    g_news_data.articles[g_news_data.count].title[write_pos++] =
+                        g_news_data.articles[g_news_data.count].title[read_pos];
+                }
+            } else {
+                g_news_data.articles[g_news_data.count].title[write_pos++] =
+                    g_news_data.articles[g_news_data.count].title[read_pos];
+            }
+        }
+        g_news_data.articles[g_news_data.count].title[write_pos] = '\0';
+
+        // Try to find source name (look backwards from title for source object)
+        const char *source_search = search_pos - 200;
+        if (source_search < json_start) source_search = json_start;
+        const char *source_start = strstr(source_search, "\"name\":\"");
+        if (source_start != NULL && source_start < search_pos) {
             source_start += 8;
-            const char *source_end = strchr(source_start, '"');
-            if (source_end != NULL) {
+
+            // Find the end of the source string, handling escaped quotes
+            const char *source_end = source_start;
+            while (*source_end != '\0') {
+                if (*source_end == '\\' && *(source_end + 1) != '\0') {
+                    source_end += 2;
+                } else if (*source_end == '"') {
+                    break;
+                } else {
+                    source_end++;
+                }
+            }
+
+            if (*source_end == '"') {
                 int source_len = source_end - source_start;
                 if (source_len > NEWS_SOURCE_MAX_LEN) source_len = NEWS_SOURCE_MAX_LEN;
                 strncpy(g_news_data.articles[g_news_data.count].source, source_start, source_len);
                 g_news_data.articles[g_news_data.count].source[source_len] = '\0';
+
+                // Clean up escaped characters in source
+                int write_pos = 0;
+                for (int read_pos = 0; read_pos < source_len; read_pos++) {
+                    if (g_news_data.articles[g_news_data.count].source[read_pos] == '\\' &&
+                        read_pos + 1 < source_len) {
+                        char next = g_news_data.articles[g_news_data.count].source[read_pos + 1];
+                        if (next == '"' || next == '\\' || next == '/') {
+                            // Skip the backslash, keep the escaped character
+                            g_news_data.articles[g_news_data.count].source[write_pos++] = next;
+                            read_pos++; // Skip the escaped char
+                        } else {
+                            g_news_data.articles[g_news_data.count].source[write_pos++] =
+                                g_news_data.articles[g_news_data.count].source[read_pos];
+                        }
+                    } else {
+                        g_news_data.articles[g_news_data.count].source[write_pos++] =
+                            g_news_data.articles[g_news_data.count].source[read_pos];
+                    }
+                }
+                g_news_data.articles[g_news_data.count].source[write_pos] = '\0';
+            }
+        }
+
+        // Try to find description (look forward from title)
+        const char *desc_start = strstr(title_end, "\"description\":\"");
+        if (desc_start != NULL && desc_start < title_end + 1000) {
+            desc_start += 15; // Skip past "description":"
+
+            // Find the end of the description string, handling escaped quotes
+            const char *desc_end = desc_start;
+            while (*desc_end != '\0') {
+                if (*desc_end == '\\' && *(desc_end + 1) != '\0') {
+                    // Skip escaped character (e.g., \", \\, \n)
+                    desc_end += 2;
+                } else if (*desc_end == '"') {
+                    // Found unescaped closing quote
+                    break;
+                } else {
+                    desc_end++;
+                }
+            }
+
+            if (*desc_end == '"') {
+                int desc_len = desc_end - desc_start;
+                if (desc_len > NEWS_DESCRIPTION_MAX_LEN) desc_len = NEWS_DESCRIPTION_MAX_LEN;
+                strncpy(g_news_data.articles[g_news_data.count].description, desc_start, desc_len);
+                g_news_data.articles[g_news_data.count].description[desc_len] = '\0';
+
+                // Replace escaped sequences for better display
+                int write_pos = 0;
+                for (int read_pos = 0; read_pos < desc_len; read_pos++) {
+                    if (g_news_data.articles[g_news_data.count].description[read_pos] == '\\' &&
+                        read_pos + 1 < desc_len) {
+                        char next = g_news_data.articles[g_news_data.count].description[read_pos + 1];
+                        if (next == 'n') {
+                            // Replace \n with space
+                            g_news_data.articles[g_news_data.count].description[write_pos++] = ' ';
+                            read_pos++; // Skip the 'n'
+                        } else if (next == '"' || next == '\\' || next == '/') {
+                            // Skip the backslash, keep the escaped character
+                            g_news_data.articles[g_news_data.count].description[write_pos++] = next;
+                            read_pos++; // Skip the escaped char
+                        } else {
+                            // Keep the backslash for unknown escapes
+                            g_news_data.articles[g_news_data.count].description[write_pos++] =
+                                g_news_data.articles[g_news_data.count].description[read_pos];
+                        }
+                    } else {
+                        g_news_data.articles[g_news_data.count].description[write_pos++] =
+                            g_news_data.articles[g_news_data.count].description[read_pos];
+                    }
+                }
+                g_news_data.articles[g_news_data.count].description[write_pos] = '\0';
             }
         }
 
@@ -257,7 +379,7 @@ void news_api_fetch_headlines(const char *api_key, const char *country)
 
     // Build HTTP request
     snprintf(g_request_buffer, sizeof(g_request_buffer),
-             "GET /v2/top-headlines?country=%s&pageSize=10&apiKey=%s HTTP/1.1\r\n"
+             "GET /v2/top-headlines?country=%s&pageSize=20&apiKey=%s HTTP/1.1\r\n"
              "Host: newsapi.org\r\n"
              "Connection: close\r\n"
              "User-Agent: PicoCalc-Omnitool\r\n"

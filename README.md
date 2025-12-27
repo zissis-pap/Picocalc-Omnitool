@@ -5,9 +5,9 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 ## Features
 
 ### Core Functionality
-- **LVGL Integration**: Full integration of LVGL v9 graphics library
+- **LVGL Integration**: Full integration of LVGL v9 graphics library with input group navigation
 - **Display Support**: SPI display driver for ILI9488 with optimized rendering
-- **Keyboard Input**: I2C keyboard support with LVGL input device driver
+- **Keyboard Input**: I2C keyboard support with full LVGL navigation (arrow keys, ENTER, TAB, ESC)
 - **WiFi Management**: Complete WiFi configuration and connection system
 - **BLE Connectivity**: Bluetooth Low Energy scanning and Serial Port Service support
 - **Dual-Core Architecture**: Optimized multicore processing (Core0: UI/WiFi, Core1: BLE)
@@ -36,10 +36,14 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 ### User Interface
 - **Application Menu**: Main screen with list of available applications
 - **News Feed**: Real-time news headlines via NewsAPI integration
+  - Full keyboard navigation with arrow keys (UP/DOWN to scroll, ENTER to open)
+  - Complete article descriptions with proper JSON parsing
+  - Maintains focus position when closing article popups
 - **Real-Time Clock**: UTC time display in bottom-right corner (auto-synced via NTP)
 - **WiFi Setup Flow**: Guided network selection and password entry
 - **BLE Scan Screen**: Dynamic device discovery with real-time updates
 - **SPS Data Screen**: Send/receive interface for Serial Port Service communication
+- **Keyboard Navigation**: Full keyboard support with arrow keys, ENTER, TAB, and ESC
 - **On-Screen Keyboard**: LVGL keyboard for password input
 - **Status Indicators**: Real-time WiFi and BLE connection status display
 - **Error Handling**: User-friendly error messages and retry options
@@ -76,6 +80,7 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 │   ├── ble_config.h
 │   ├── news_api.h
 │   ├── ntp_client.h
+│   ├── api_tokens.h.template        # Template for API keys (copy to api_tokens.h)
 │   ├── lv_port_disp_picocalc_ILI9488.h
 │   └── lv_port_indev_picocalc_kb.h
 ├── lcdspi/                          # LCD SPI communication library (DMA support)
@@ -94,14 +99,20 @@ The News Feed feature requires a free API key from NewsAPI:
 
 1. Visit [newsapi.org](https://newsapi.org) and sign up for a free account
 2. Copy your API key from the dashboard
-3. Edit `src/ui_screens.c` and find the `create_news_feed_screen()` function (around line 1225)
-4. Replace `YOUR_API_KEY_HERE` with your actual API key:
+3. If `include/api_tokens.h` doesn't exist, copy it from the template:
+   ```bash
+   cp include/api_tokens.h.template include/api_tokens.h
+   ```
+4. Edit `include/api_tokens.h` and replace `YOUR_API_KEY_HERE` with your actual API key:
    ```c
-   const char *api_key = "your_actual_api_key_here";
+   #define NEWSAPI_KEY "your_actual_api_key_here"
    ```
 5. Rebuild the project
 
-**Note**: The free tier allows 100 requests per day, which is sufficient for testing and personal use.
+**Note**:
+- The `api_tokens.h` file is git-ignored to prevent accidentally committing your API keys
+- The free tier allows 100 requests per day, which is sufficient for testing and personal use
+- You can add other API keys to this file as needed
 
 ## Build Instructions
 ```bash
@@ -183,7 +194,87 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ## Changelog
 
-### Version 0.0.8 - Current Development
+### Version 0.00.10 - Current Development
+
+#### New Features
+- **NTP Time Synchronization**: Automatic time sync on WiFi connection
+  - NTP client fetches time from pool.ntp.org on successful WiFi connection
+  - Software-based time tracking using Pico's microsecond timer
+  - Real-time clock display in bottom-right corner of main screen (HH:MM:SS format)
+  - Updates every second with UTC time
+  - Persists across screen changes (resyncs on WiFi reconnect)
+
+- **News Feed Keyboard Navigation**: Full keyboard control for news browsing
+  - **Arrow Keys (UP/DOWN)**: Scroll through news articles in the feed
+  - **ENTER**: Open selected article to read full details
+  - **TAB**: Switch focus between news list and back button
+  - **ESC**: Close article detail popups
+  - Automatic focus management - returns to selected article after closing popup
+  - News list auto-focused when entering News Feed screen
+
+#### UI Changes
+- **Real-time clock display** in bottom-right corner of main screen
+- **Keyboard-navigable News Feed**: Arrow key scrolling and focus indicators
+- **Improved News Article Display**: Full descriptions now shown without truncation
+
+#### Technical Additions
+- **NTP Client** (`ntp_client.c/h`):
+  - NTP protocol implementation using UDP
+  - Software time tracking with `time_us_64()` microsecond timer
+  - Automatic sync on WiFi connection (both auto-connect and manual)
+  - State machine for sync status (IDLE, REQUESTING, SYNCED, ERROR)
+  - Time API with `struct tm` and Unix timestamp support
+
+- **Enhanced JSON Parser** (`news_api.c`):
+  - Proper handling of escaped characters in JSON strings (`\"`, `\\`, `\/`)
+  - Character-by-character parsing to correctly identify string boundaries
+  - Prevents premature truncation when descriptions contain quotes
+  - Efficient read/write pointer algorithm for escape sequence cleanup
+  - Applied to titles, sources, and descriptions for complete data extraction
+
+- **LVGL Input Group Integration** (`ui_screens.c`):
+  - News list added to default keyboard navigation group
+  - Automatic focus restoration after popup close
+  - Custom event handlers for focus management
+  - Prevents unwanted focus jumps to last item
+
+- **LVGL Timer Integration**: Automatic time display updates every second
+- **Improved Resource Management**: Centralized cleanup of timers and widget references in `transition_to_state()`
+
+#### Bug Fixes
+- **Fixed News Feed unresponsiveness**: Resolved issue where app would hang when pressing Back button
+  - Added proper timer cleanup during state transitions
+  - Cleared global widget references to prevent dangling pointers
+  - Applied fix to all screen transitions for improved stability
+
+- **Fixed incomplete news descriptions**: Articles with quotes or special characters now display completely
+  - Previous parser used `strchr()` which stopped at first quote, truncating content
+  - Example: `"CEO says \"we're excited\""` would show as `"CEO says \"` (incomplete)
+  - Now correctly handles all JSON escape sequences and shows full text
+
+- **Fixed focus restoration in News Feed**: Closing article popup now returns to the same position
+  - Previously jumped to last article in list when closing popup
+  - Custom close handler stores and restores originally focused article button
+  - Maintains scroll position for seamless browsing experience
+
+---
+
+### Version 0.00.9 - 2025-12-26
+
+#### New Features
+- **NTP Time Synchronization**: Added automatic time sync on WiFi connection
+  - NTP client implementation (see Version 0.00.10 for full details)
+  - Real-time clock display on main screen
+  - Software-based time tracking
+
+#### Bug Fixes
+- **Fixed News Feed unresponsiveness**: App no longer hangs when pressing Back button
+  - Proper timer cleanup during state transitions
+  - Cleared global widget references
+
+---
+
+### Version 0.00.8 - 2025-12-26
 
 #### New Features
 - **News Feed Application**: Added NewsAPI integration to fetch and display news headlines
@@ -196,20 +287,12 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
   - Configurable country and API key support
   - Error handling with user-friendly messages
 
-- **NTP Time Synchronization**: Automatic time sync on WiFi connection
-  - NTP client fetches time from pool.ntp.org on successful WiFi connection
-  - Software-based time tracking using Pico's microsecond timer
-  - Real-time clock display in bottom-right corner of main screen (HH:MM:SS format)
-  - Updates every second with UTC time
-  - Persists across screen changes (resyncs on WiFi reconnect)
-
 #### UI Changes
 - **Main Screen Redesign**: Replaced text input/output with application launcher
   - "Applications:" section with list of available apps
   - News Feed button as first application
   - Cleaner, more organized interface
   - WiFi and BLE buttons remain in top-right corner
-  - Real-time clock display in bottom-right corner
 
 #### Technical Additions
 - **NewsAPI Client** (`news_api.c/h`):
@@ -219,25 +302,12 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
   - Simple JSON parser for NewsAPI responses
   - State machine for fetch status
   - Support for up to 10 news articles
-- **NTP Client** (`ntp_client.c/h`):
-  - NTP protocol implementation using UDP
-  - Software time tracking with `time_us_64()` microsecond timer
-  - Automatic sync on WiFi connection (both auto-connect and manual)
-  - State machine for sync status (IDLE, REQUESTING, SYNCED, ERROR)
-  - Time API with `struct tm` and Unix timestamp support
 - **Enhanced State Machine**: Added `APP_STATE_NEWS_FEED` state
-- **LVGL Timer Integration**: Automatic UI updates for news and time display
-- **Improved Resource Management**: Centralized cleanup of timers and widget references in `transition_to_state()`
-
-#### Bug Fixes
-- **Fixed News Feed unresponsiveness**: Resolved issue where app would hang when pressing Back button
-  - Added proper timer cleanup during state transitions
-  - Cleared global widget references to prevent dangling pointers
-  - Applied fix to all screen transitions for improved stability
+- **LVGL Timer Integration**: Automatic UI updates when news data arrives
 
 ---
 
-### Version 0.0.7 - 2025-12-26
+### Version 0.00.7 - 2025-12-26
 
 #### BLE Features
 - **Implemented BLE connectivity with SPS support**
@@ -258,7 +328,7 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ---
 
-### Version 0.0.6 - 2025-12-26
+### Version 0.00.6 - 2025-12-26
 
 #### Documentation
 - **Improved README.md**
@@ -269,7 +339,7 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ---
 
-### Version 0.0.5 - 2025-12-26
+### Version 0.00.5 - 2025-12-26
 
 #### Display Performance Optimizations (RP2350)
 - **Increased LVGL buffer**: Expanded from 10 rows (6.4 KB) to 160 rows (~102 KB)
@@ -299,7 +369,7 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ---
 
-### Version 0.0.4 - 2025-12-26
+### Version 0.00.4 - 2025-12-26
 
 #### WiFi Features
 - **Added Skip button**: Users can now skip WiFi configuration and go directly to main app
@@ -317,12 +387,12 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ---
 
-### Version 0.0.3 - 2025-12-26
+### Version 0.00.3 - 2025-12-26
 
 #### Project Organization
 - **Renamed project** from "pico_lvgl_display_demo" to "Picocalc-Omnitool"
 - **Reorganized file structure**: Moved source files to `src/` and headers to `include/`
-- **Simplified version display**: Main screen now shows only version number (e.g., "v0.0.3") instead of full build info
+- **Simplified version display**: Main screen now shows only version number (e.g., "v0.00.3") instead of full build info
 - **Automated version strings**: `VERSION_STRING` and `FULL_VERSION_STRING` now auto-generate from `APP_VERSION_MAJOR/MINOR/PATCH` defines
 
 #### LVGL & Dependencies
@@ -345,7 +415,7 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ---
 
-### Version 0.0.2 and earlier
+### Version 0.00.2 and earlier
 Initial development versions with basic WiFi and LVGL functionality.
 
 ## Special thanks

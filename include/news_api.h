@@ -5,12 +5,12 @@
 #include <stdbool.h>
 
 // Maximum number of news articles to fetch
-#define MAX_NEWS_ARTICLES 10
+#define MAX_NEWS_ARTICLES 20
 
 // Maximum lengths for news data
 #define NEWS_TITLE_MAX_LEN 128
 #define NEWS_SOURCE_MAX_LEN 64
-#define NEWS_DESCRIPTION_MAX_LEN 256
+#define NEWS_DESCRIPTION_MAX_LEN 512
 
 // News article structure
 typedef struct {

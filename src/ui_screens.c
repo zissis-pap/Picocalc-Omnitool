@@ -2,6 +2,7 @@
 #include "version.h"
 #include "news_api.h"
 #include "ntp_client.h"
+#include "api_tokens.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -25,6 +26,7 @@ static void ble_menu_btn_event(lv_event_t *e);
 static void ble_back_btn_event(lv_event_t *e);
 static void news_feed_btn_event(lv_event_t *e);
 static void news_back_btn_event(lv_event_t *e);
+static void news_article_clicked_event(lv_event_t *e);
 
 // Global UI context pointer for event handlers
 static ui_context_t *g_ui_ctx = NULL;
@@ -39,6 +41,8 @@ static lv_obj_t *news_status_label = NULL; // For news loading status
 static lv_timer_t *news_update_timer = NULL; // Timer for updating news display
 static lv_obj_t *time_label = NULL;       // For displaying current time
 static lv_timer_t *time_update_timer = NULL; // Timer for updating time display
+static uint8_t news_article_indices[MAX_NEWS_ARTICLES]; // Store article indices for click handlers
+static lv_obj_t *news_article_buttons[MAX_NEWS_ARTICLES]; // Store button references for focus restoration
 
 // Initialize UI system
 void ui_init(ui_context_t *ctx) {
@@ -68,6 +72,7 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
     news_list = NULL;
     news_status_label = NULL;
     time_label = NULL;
+    memset(news_article_buttons, 0, sizeof(news_article_buttons));
 
     // Delete old screen
     if (ctx->current_screen != NULL)
@@ -1184,6 +1189,106 @@ static void news_back_btn_event(lv_event_t *e)
     transition_to_state(ctx, APP_STATE_MAIN_APP);
 }
 
+// Event handler: News popup close button clicked
+static void news_popup_close_event(lv_event_t *e)
+{
+    lv_obj_t *btn = lv_event_get_target(e);
+    lv_obj_t *clicked_article_btn = (lv_obj_t *)lv_event_get_user_data(e);
+
+    // Find and close the msgbox
+    lv_obj_t *mbox = btn;
+    while (mbox && !lv_obj_check_type(mbox, &lv_msgbox_class)) {
+        mbox = lv_obj_get_parent(mbox);
+    }
+    if (mbox) {
+        lv_msgbox_close(mbox);
+    }
+
+    // Restore focus to the article button that was clicked
+    if (clicked_article_btn != NULL) {
+        lv_group_t *group = lv_group_get_default();
+        if (group != NULL) {
+            lv_group_focus_obj(clicked_article_btn);
+        }
+    }
+}
+
+// Event handler: News article clicked
+static void news_article_clicked_event(lv_event_t *e)
+{
+    // Get the article index from user data
+    uint8_t *article_idx = (uint8_t *)lv_event_get_user_data(e);
+    if (article_idx == NULL) return;
+
+    news_data_t *news_data = news_api_get_data();
+    if (*article_idx >= news_data->count) return;
+
+    news_article_t *article = &news_data->articles[*article_idx];
+
+    // Store which button was clicked for focus restoration
+    lv_obj_t *clicked_btn = lv_event_get_target(e);
+
+    // Create message box to show article details
+    lv_obj_t *mbox = lv_msgbox_create(NULL);
+
+    // Set title (source)
+    if (strlen(article->source) > 0) {
+        lv_msgbox_add_title(mbox, article->source);
+    } else {
+        lv_msgbox_add_title(mbox, "News Article");
+    }
+
+    // Build content text with title and description
+    char content[NEWS_TITLE_MAX_LEN + NEWS_DESCRIPTION_MAX_LEN + 10];
+    if (strlen(article->description) > 0) {
+        snprintf(content, sizeof(content), "%s\n\n%s",
+                 article->title, article->description);
+    } else {
+        snprintf(content, sizeof(content), "%s\n\n(No description available)",
+                 article->title);
+    }
+
+    lv_obj_t *text_obj = lv_msgbox_add_text(mbox, content);
+
+    // Style the message box
+    lv_obj_set_width(mbox, 300);
+    lv_obj_set_height(mbox, 200);
+    lv_obj_set_style_bg_color(mbox, lv_color_hex(0x2d2d2d), 0);
+
+    // Style the text content
+    if (text_obj != NULL) {
+        lv_obj_set_style_text_font(text_obj, &lv_font_montserrat_10, 0);
+        lv_obj_set_style_text_color(text_obj, lv_color_hex(0xdddddd), 0);
+        lv_label_set_long_mode(text_obj, LV_LABEL_LONG_WRAP);
+    }
+
+    // Get content area to enable scrolling
+    lv_obj_t *content_area = lv_msgbox_get_content(mbox);
+    if (content_area != NULL) {
+        lv_obj_set_height(content_area, 140);
+        lv_obj_set_style_pad_all(content_area, 5, 0);
+    }
+
+    // Add close button with custom event handler to restore focus
+    lv_obj_t *close_btn = lv_msgbox_add_close_button(mbox);
+    if (close_btn != NULL) {
+        lv_obj_add_event_cb(close_btn, news_popup_close_event, LV_EVENT_CLICKED, clicked_btn);
+    }
+
+    lv_obj_center(mbox);
+
+    // Auto-focus the close button so user can immediately interact
+    if (close_btn != NULL) {
+        lv_group_t *group = lv_group_get_default();
+        if (group != NULL) {
+            lv_group_add_obj(group, close_btn);
+            lv_group_focus_obj(close_btn);
+        }
+    }
+
+    printf("Showing article %d: %s\n", *article_idx, article->title);
+}
+
 // =============================================================================
 // News Feed Screen Implementation
 // =============================================================================
@@ -1200,18 +1305,43 @@ static void news_update_timer_cb(lv_timer_t *timer)
         // Clear the list
         lv_obj_clean(news_list);
 
-        // Add news articles to the list
+        // Add news articles to the list with improved styling
         for (uint8_t i = 0; i < news_data->count; i++) {
+            // Store article index for click handler
+            news_article_indices[i] = i;
+
+            // Create a button for each news item
+            lv_obj_t *btn = lv_list_add_button(news_list, NULL, "");
+            lv_obj_set_style_pad_ver(btn, 4, 0);
+            lv_obj_set_style_bg_color(btn, lv_color_hex(0x2d2d2d), 0);
+            lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+            lv_obj_set_style_radius(btn, 4, 0);
+            lv_obj_set_style_border_width(btn, 1, 0);
+            lv_obj_set_style_border_color(btn, lv_color_hex(0x4a4a4a), 0);
+
+            // Add click event handler with article index
+            lv_obj_add_event_cb(btn, news_article_clicked_event, LV_EVENT_CLICKED, &news_article_indices[i]);
+
+            // Create label for the news item
+            lv_obj_t *label = lv_label_create(btn);
+
+            // Build the text with source and title
             char item_text[256];
             if (strlen(news_data->articles[i].source) > 0) {
-                snprintf(item_text, sizeof(item_text), "[%s] %s",
+                snprintf(item_text, sizeof(item_text), "[%s]\n%s",
                          news_data->articles[i].source,
                          news_data->articles[i].title);
             } else {
                 snprintf(item_text, sizeof(item_text), "%s",
                          news_data->articles[i].title);
             }
-            lv_list_add_text(news_list, item_text);
+
+            lv_label_set_text(label, item_text);
+            lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+            lv_obj_set_width(label, 270);
+            lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
+            lv_obj_set_style_text_color(label, lv_color_hex(0xdddddd), 0);
+            lv_obj_set_style_pad_all(label, 2, 0);
         }
 
         // Stop the timer
@@ -1225,6 +1355,7 @@ static void news_update_timer_cb(lv_timer_t *timer)
     } else if (news_data->state == NEWS_STATE_ERROR && news_status_label != NULL) {
         // Show error message
         lv_label_set_text(news_status_label, news_data->error_message);
+        lv_obj_set_style_text_font(news_status_label, &lv_font_montserrat_12, 0);
 
         // Stop the timer
         if (news_update_timer != NULL) {
@@ -1240,40 +1371,61 @@ static void news_update_timer_cb(lv_timer_t *timer)
 lv_obj_t* create_news_feed_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(screen, lv_color_hex(0x1a1a1a), 0);
 
     // Title
     lv_obj_t *title = lv_label_create(screen);
     lv_label_set_text(title, "News Feed");
     lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xffffff), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 5);
 
     // Back button
     lv_obj_t *back_btn = lv_btn_create(screen);
     lv_obj_set_size(back_btn, 60, 30);
     lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 5, 5);
+    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x3d3d3d), 0);
+    lv_obj_set_style_radius(back_btn, 5, 0);
     lv_obj_add_event_cb(back_btn, news_back_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *back_label = lv_label_create(back_btn);
     lv_label_set_text(back_label, "Back");
+    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_12, 0);
     lv_obj_center(back_label);
 
     // Status label for loading/error messages
     news_status_label = lv_label_create(screen);
     lv_obj_set_style_text_align(news_status_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(news_status_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(news_status_label, lv_color_hex(0xaaaaaa), 0);
     lv_obj_align(news_status_label, LV_ALIGN_CENTER, 0, -50);
 
     // List for news articles
     news_list = lv_list_create(screen);
     lv_obj_set_size(news_list, 300, 220);
     lv_obj_align(news_list, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_style_bg_color(news_list, lv_color_hex(0x242424), 0);
+    lv_obj_set_style_border_width(news_list, 2, 0);
+    lv_obj_set_style_border_color(news_list, lv_color_hex(0x3d3d3d), 0);
+    lv_obj_set_style_radius(news_list, 6, 0);
+    lv_obj_set_style_pad_all(news_list, 5, 0);
+
+    // Add widgets to keyboard navigation group for arrow key scrolling
+    // The back button is added first, then the news list is added and focused
+    lv_group_t *group = lv_group_get_default();
+    if (group != NULL) {
+        lv_group_add_obj(group, back_btn);
+        lv_group_add_obj(group, news_list);
+        lv_group_focus_obj(news_list);  // Focus list by default for immediate scrolling
+    }
 
     // Initialize news API if not already done
     news_api_init();
 
-    // Check if we need an API key
+    // API key is defined in api_tokens.h
     // NOTE: Users need to get a free API key from https://newsapi.org
-    // For now, using a placeholder - users should replace this with their own key
-    const char *api_key = "YOUR_API_KEY_HERE";
+    const char *api_key = NEWSAPI_KEY;
 
     // Check if API key is configured
     if (strcmp(api_key, "YOUR_API_KEY_HERE") == 0) {
@@ -1281,10 +1433,16 @@ lv_obj_t* create_news_feed_screen(ui_context_t *ctx)
                          "Please configure NewsAPI key\n"
                          "Get free key at:\n"
                          "newsapi.org");
-        lv_list_add_text(news_list, "API key not configured");
+        lv_obj_t *placeholder = lv_label_create(news_list);
+        lv_label_set_text(placeholder, "API key not configured");
+        lv_obj_set_style_text_font(placeholder, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(placeholder, lv_color_hex(0x888888), 0);
     } else {
         lv_label_set_text(news_status_label, "Loading news...");
-        lv_list_add_text(news_list, "Fetching latest headlines...");
+        lv_obj_t *placeholder = lv_label_create(news_list);
+        lv_label_set_text(placeholder, "Fetching latest headlines...");
+        lv_obj_set_style_text_font(placeholder, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_color(placeholder, lv_color_hex(0x888888), 0);
 
         // Start fetching news (country code: us = United States)
         news_api_fetch_headlines(api_key, "us");
