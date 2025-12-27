@@ -39,6 +39,7 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
   - Full keyboard navigation with arrow keys (UP/DOWN to scroll, ENTER to open)
   - Complete article descriptions with proper JSON parsing
   - Maintains focus position when closing article popups
+  - **News Ticker**: Scrolling news headlines displayed next to clock on main screen
 - **Real-Time Clock**: UTC time display in bottom-right corner (auto-synced via NTP)
 - **WiFi Setup Flow**: Guided network selection and password entry
 - **BLE Scan Screen**: Dynamic device discovery with real-time updates
@@ -194,7 +195,20 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ## Changelog
 
-### Version 0.00.10 - Current Development
+### Version 0.01.0 - Current Development (2025-12-27)
+
+#### New Features
+- **Scrolling News Ticker on Main Screen**: Latest news headline scrolls next to the clock
+  - Displays first article title from news feed after visiting News Feed
+  - Circular scrolling mode for seamless looping
+  - Positioned in bottom-left corner next to time display
+  - 190px width to leave space for clock
+  - Automatically updates when returning from News Feed
+  - Uses same orange theme styling as other UI elements
+
+---
+
+### Version 0.00.10 - Major Bug Fixes and Improvements (2025-12-26)
 
 #### New Features
 - **NTP Time Synchronization**: Automatic time sync on WiFi connection

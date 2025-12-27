@@ -43,6 +43,7 @@ static lv_obj_t *time_label = NULL;       // For displaying current time
 static lv_timer_t *time_update_timer = NULL; // Timer for updating time display
 static uint8_t news_article_indices[MAX_NEWS_ARTICLES]; // Store article indices for click handlers
 static lv_obj_t *news_article_buttons[MAX_NEWS_ARTICLES]; // Store button references for focus restoration
+static lv_obj_t *news_ticker_label = NULL;  // For displaying scrolling news title on main screen
 
 // ============================================================================
 // MODERN THEME STYLING SYSTEM
@@ -170,6 +171,7 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
     news_list = NULL;
     news_status_label = NULL;
     time_label = NULL;
+    news_ticker_label = NULL;
     memset(news_article_buttons, 0, sizeof(news_article_buttons));
 
     // Delete old screen
@@ -672,6 +674,23 @@ lv_obj_t* create_main_app_screen(ui_context_t *ctx)
     lv_label_set_text(time_label, "--:--:--");
     apply_status_style(time_label);
     lv_obj_align(time_label, LV_ALIGN_BOTTOM_RIGHT, -PADDING_SMALL, -PADDING_SMALL);
+
+    // News ticker label (scrolling news title next to clock)
+    news_ticker_label = lv_label_create(screen);
+    apply_status_style(news_ticker_label);
+    lv_label_set_long_mode(news_ticker_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_width(news_ticker_label, 190);  // Leave space for time on the right
+    lv_obj_align(news_ticker_label, LV_ALIGN_BOTTOM_LEFT, PADDING_SMALL, -PADDING_SMALL);
+
+    // Check if there's news data available
+    news_data_t *news_data = news_api_get_data();
+    if (news_data != NULL && news_data->state == NEWS_STATE_SUCCESS && news_data->count > 0) {
+        // Display the first article's title
+        lv_label_set_text(news_ticker_label, news_data->articles[0].title);
+    } else {
+        // No news available
+        lv_label_set_text(news_ticker_label, "");
+    }
 
     // Start time update timer (update every 1 second)
     if (time_update_timer != NULL) {
