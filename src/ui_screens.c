@@ -44,6 +44,104 @@ static lv_timer_t *time_update_timer = NULL; // Timer for updating time display
 static uint8_t news_article_indices[MAX_NEWS_ARTICLES]; // Store article indices for click handlers
 static lv_obj_t *news_article_buttons[MAX_NEWS_ARTICLES]; // Store button references for focus restoration
 
+// ============================================================================
+// MODERN THEME STYLING SYSTEM
+// ============================================================================
+
+// Color palette - Modern dark theme with orange text
+#define THEME_BG_PRIMARY     0x1a1a1a  // Screen background (darkest)
+#define THEME_BG_SECONDARY   0x242424  // Container/list background
+#define THEME_BG_TERTIARY    0x2d2d2d  // Input/card background
+#define THEME_BG_BUTTON      0x3d3d3d  // Button background
+#define THEME_BORDER_LIGHT   0x4a4a4a  // Subtle borders
+#define THEME_BORDER_NORMAL  0x3d3d3d  // Standard borders
+#define THEME_TEXT_PRIMARY   0xffa726  // Titles/headers (bright orange)
+#define THEME_TEXT_SECONDARY 0xff9800  // Body text (orange)
+#define THEME_TEXT_TERTIARY  0xff8a65  // Status/muted text (soft orange)
+#define THEME_TEXT_DISABLED  0xcc7a52  // Placeholder text (muted orange)
+#define THEME_ACCENT_SUCCESS 0x4caf50  // Success states (green)
+#define THEME_ACCENT_ERROR   0xf44336  // Error states (red)
+
+// Font hierarchy (Montserrat, minimum 12px for body text)
+#define FONT_TITLE &lv_font_montserrat_14  // Screen titles
+#define FONT_BODY  &lv_font_montserrat_12  // Body text, labels, buttons
+#define FONT_SMALL &lv_font_montserrat_10  // Small details (use sparingly)
+
+// Spacing constants
+#define PADDING_SMALL  5
+#define PADDING_NORMAL 10
+#define PADDING_LARGE  20
+#define BORDER_THIN    1
+
+// Styling helper functions for consistent appearance across screens
+static void apply_screen_style(lv_obj_t *screen) {
+    lv_obj_set_style_bg_color(screen, lv_color_hex(THEME_BG_PRIMARY), 0);
+}
+
+static void apply_title_style(lv_obj_t *label) {
+    lv_obj_set_style_text_font(label, FONT_TITLE, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(THEME_TEXT_PRIMARY), 0);
+}
+
+static void apply_body_style(lv_obj_t *label) {
+    lv_obj_set_style_text_font(label, FONT_BODY, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+}
+
+static void apply_status_style(lv_obj_t *label) {
+    lv_obj_set_style_text_font(label, FONT_BODY, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(THEME_TEXT_TERTIARY), 0);
+}
+
+static void apply_button_style(lv_obj_t *btn) {
+    lv_obj_set_style_bg_color(btn, lv_color_hex(THEME_BG_BUTTON), 0);
+    lv_obj_set_style_radius(btn, 5, 0);
+}
+
+static void apply_button_label_style(lv_obj_t *label) {
+    lv_obj_set_style_text_font(label, FONT_BODY, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+}
+
+static void apply_textarea_style(lv_obj_t *ta) {
+    lv_obj_set_style_bg_color(ta, lv_color_hex(THEME_BG_TERTIARY), 0);
+    lv_obj_set_style_border_color(ta, lv_color_hex(THEME_BORDER_LIGHT), 0);
+    lv_obj_set_style_border_width(ta, BORDER_THIN, 0);
+    lv_obj_set_style_radius(ta, 4, 0);
+    lv_obj_set_style_text_font(ta, FONT_BODY, 0);
+    lv_obj_set_style_text_color(ta, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+    lv_obj_set_style_pad_all(ta, PADDING_SMALL, 0);
+}
+
+static void apply_dropdown_style(lv_obj_t *dd) {
+    // Style the dropdown button (closed state)
+    lv_obj_set_style_bg_color(dd, lv_color_hex(THEME_BG_TERTIARY), 0);
+    lv_obj_set_style_border_color(dd, lv_color_hex(THEME_BORDER_LIGHT), 0);
+    lv_obj_set_style_border_width(dd, BORDER_THIN, 0);
+    lv_obj_set_style_radius(dd, 4, 0);
+    lv_obj_set_style_text_font(dd, FONT_BODY, 0);
+    lv_obj_set_style_text_color(dd, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+    lv_obj_set_style_pad_left(dd, PADDING_SMALL, 0);
+    lv_obj_set_style_pad_right(dd, PADDING_SMALL, 0);
+
+    // Style the dropdown list (opened state)
+    lv_obj_t *list = lv_dropdown_get_list(dd);
+    if (list != NULL) {
+        lv_obj_set_style_bg_color(list, lv_color_hex(THEME_BG_SECONDARY), 0);
+        lv_obj_set_style_border_color(list, lv_color_hex(THEME_BORDER_LIGHT), 0);
+        lv_obj_set_style_border_width(list, 2, 0);
+        lv_obj_set_style_radius(list, 4, 0);
+        lv_obj_set_style_text_font(list, FONT_BODY, 0);
+        lv_obj_set_style_text_color(list, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+        lv_obj_set_style_pad_all(list, PADDING_SMALL, 0);
+
+        // Style selected/highlighted items - orange background with black text
+        lv_obj_set_style_bg_color(list, lv_color_hex(THEME_TEXT_PRIMARY), LV_PART_SELECTED);
+        lv_obj_set_style_bg_opa(list, LV_OPA_COVER, LV_PART_SELECTED);
+        lv_obj_set_style_text_color(list, lv_color_hex(0x000000), LV_PART_SELECTED);
+    }
+}
+
 // Initialize UI system
 void ui_init(ui_context_t *ctx) {
     memset(ctx, 0, sizeof(ui_context_t));
@@ -135,73 +233,92 @@ app_state_t get_current_state(ui_context_t *ctx)
 }
 
 // Create splash screen
-lv_obj_t* create_splash_screen(ui_context_t *ctx) 
+lv_obj_t* create_splash_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
 
     lv_obj_t *label = lv_label_create(screen);
     lv_label_set_text(label, "Initializing...");
-    lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+    apply_title_style(label);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, -20);
+
+    // Add spinner for visual feedback
+    lv_obj_t *spinner = lv_spinner_create(screen);
+    lv_obj_set_size(spinner, 60, 60);
+    lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(THEME_TEXT_PRIMARY), LV_PART_INDICATOR);
 
     return screen;
 }
 
 // Create WiFi scan screen
-lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx) 
+lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
 
     // Title
     lv_obj_t *title = lv_label_create(screen);
     lv_label_set_text(title, "Select WiFi Network");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+    apply_title_style(title);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_SMALL);
 
     // Scanning status
     lv_obj_t *scan_label = lv_label_create(screen);
 
-    if (!ctx->scan_state.scan_complete) 
+    if (!ctx->scan_state.scan_complete)
     {
         lv_label_set_text(scan_label, "Scanning...");
+        apply_body_style(scan_label);
         lv_obj_align(scan_label, LV_ALIGN_CENTER, 0, -30);
 
         // Spinner
         lv_obj_t *spinner = lv_spinner_create(screen);
         lv_obj_set_size(spinner, 60, 60);
         lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 20);
+        lv_obj_set_style_arc_color(spinner, lv_color_hex(THEME_TEXT_PRIMARY), LV_PART_INDICATOR);
 
         // Skip button
         lv_obj_t *skip_btn = lv_btn_create(screen);
         lv_obj_set_size(skip_btn, 120, 35);
-        lv_obj_align(skip_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        apply_button_style(skip_btn);
+        lv_obj_align(skip_btn, LV_ALIGN_BOTTOM_MID, 0, -PADDING_NORMAL);
         lv_obj_add_event_cb(skip_btn, skip_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *skip_label = lv_label_create(skip_btn);
         lv_label_set_text(skip_label, "Skip");
+        apply_button_label_style(skip_label);
         lv_obj_center(skip_label);
     } 
-    else if (ctx->scan_state.count == 0) 
+    else if (ctx->scan_state.count == 0)
     {
         lv_label_set_text(scan_label, "No networks found");
+        apply_body_style(scan_label);
         lv_obj_align(scan_label, LV_ALIGN_CENTER, 0, -40);
 
         // Rescan button
         lv_obj_t *rescan_btn = lv_btn_create(screen);
         lv_obj_set_size(rescan_btn, 150, 40);
+        apply_button_style(rescan_btn);
         lv_obj_align(rescan_btn, LV_ALIGN_CENTER, 0, 10);
         lv_obj_add_event_cb(rescan_btn, rescan_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *btn_label = lv_label_create(rescan_btn);
         lv_label_set_text(btn_label, "Scan Again");
+        apply_button_label_style(btn_label);
         lv_obj_center(btn_label);
 
         // Skip button
         lv_obj_t *skip_btn = lv_btn_create(screen);
         lv_obj_set_size(skip_btn, 120, 35);
-        lv_obj_align(skip_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        apply_button_style(skip_btn);
+        lv_obj_align(skip_btn, LV_ALIGN_BOTTOM_MID, 0, -PADDING_NORMAL);
         lv_obj_add_event_cb(skip_btn, skip_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *skip_label = lv_label_create(skip_btn);
         lv_label_set_text(skip_label, "Skip");
+        apply_button_label_style(skip_label);
         lv_obj_center(skip_label);
     } 
     else 
@@ -209,11 +326,12 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx)
         // Create dropdown with network list
         lv_obj_t *dropdown = lv_dropdown_create(screen);
         lv_obj_set_width(dropdown, 280);
+        apply_dropdown_style(dropdown);
         lv_obj_align(dropdown, LV_ALIGN_CENTER, 0, -40);
 
         // Build network list string
         char network_list[MAX_SCAN_RESULTS * 40] = {0};
-        for (int i = 0; i < ctx->scan_state.count; i++) 
+        for (int i = 0; i < ctx->scan_state.count; i++)
         {
             if (i > 0) strcat(network_list, "\n");
 
@@ -233,37 +351,44 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx)
         // Info label
         lv_obj_t *info = lv_label_create(screen);
         lv_label_set_text_fmt(info, "Found %d networks", ctx->scan_state.count);
+        apply_status_style(info);
         lv_obj_align(info, LV_ALIGN_TOP_MID, 0, 40);
 
         // Connect button
         lv_obj_t *connect_btn = lv_btn_create(screen);
         lv_obj_set_size(connect_btn, 120, 40);
+        apply_button_style(connect_btn);
         lv_obj_align(connect_btn, LV_ALIGN_CENTER, 0, 20);
         lv_obj_set_user_data(connect_btn, dropdown);
         lv_obj_add_event_cb(connect_btn, network_selected_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *connect_label = lv_label_create(connect_btn);
         lv_label_set_text(connect_label, "Connect");
+        apply_button_label_style(connect_label);
         lv_obj_center(connect_label);
 
         // Rescan button (left side at bottom)
         lv_obj_t *rescan_btn = lv_btn_create(screen);
         lv_obj_set_size(rescan_btn, 100, 35);
-        lv_obj_align(rescan_btn, LV_ALIGN_BOTTOM_LEFT, 10, -10);
+        apply_button_style(rescan_btn);
+        lv_obj_align(rescan_btn, LV_ALIGN_BOTTOM_LEFT, PADDING_NORMAL, -PADDING_NORMAL);
         lv_obj_add_event_cb(rescan_btn, rescan_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *btn_label = lv_label_create(rescan_btn);
         lv_label_set_text(btn_label, "Rescan");
+        apply_button_label_style(btn_label);
         lv_obj_center(btn_label);
 
         // Skip button (right side at bottom)
         lv_obj_t *skip_btn = lv_btn_create(screen);
         lv_obj_set_size(skip_btn, 100, 35);
-        lv_obj_align(skip_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -10);
+        apply_button_style(skip_btn);
+        lv_obj_align(skip_btn, LV_ALIGN_BOTTOM_RIGHT, -PADDING_NORMAL, -PADDING_NORMAL);
         lv_obj_add_event_cb(skip_btn, skip_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *skip_label = lv_label_create(skip_btn);
         lv_label_set_text(skip_label, "Skip");
+        apply_button_label_style(skip_label);
         lv_obj_center(skip_label);
     }
 
@@ -271,30 +396,37 @@ lv_obj_t* create_wifi_scan_screen(ui_context_t *ctx)
 }
 
 // Create password entry screen
-lv_obj_t* create_password_screen(ui_context_t *ctx) 
+lv_obj_t* create_password_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
 
     // Title with SSID
     lv_obj_t *title = lv_label_create(screen);
     lv_label_set_text_fmt(title, "Connect to:\n%s", ctx->selected_ssid);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+    apply_title_style(title);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_NORMAL);
 
     // Check if network is open (no password required)
-    if (ctx->selected_auth == CYW43_AUTH_OPEN) 
+    if (ctx->selected_auth == CYW43_AUTH_OPEN)
     {
         lv_obj_t *open_label = lv_label_create(screen);
         lv_label_set_text(open_label, "Open network\n(no password)");
+        apply_body_style(open_label);
+        lv_obj_set_style_text_align(open_label, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_align(open_label, LV_ALIGN_CENTER, 0, -30);
 
         // Connect button
         lv_obj_t *connect_btn = lv_btn_create(screen);
         lv_obj_set_size(connect_btn, 120, 40);
+        apply_button_style(connect_btn);
         lv_obj_align(connect_btn, LV_ALIGN_CENTER, 0, 30);
         lv_obj_add_event_cb(connect_btn, connect_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *btn_label = lv_label_create(connect_btn);
         lv_label_set_text(btn_label, "Connect");
+        apply_button_label_style(btn_label);
         lv_obj_center(btn_label);
     } 
     else 
@@ -302,6 +434,7 @@ lv_obj_t* create_password_screen(ui_context_t *ctx)
         // Password textarea
         password_ta = lv_textarea_create(screen);
         lv_obj_set_size(password_ta, 280, 40);
+        apply_textarea_style(password_ta);
         lv_obj_align(password_ta, LV_ALIGN_TOP_MID, 0, 60);
         lv_textarea_set_password_mode(password_ta, true);
         lv_textarea_set_one_line(password_ta, true);
@@ -311,53 +444,62 @@ lv_obj_t* create_password_screen(ui_context_t *ctx)
         // Show password checkbox
         lv_obj_t *show_pwd_cb = lv_checkbox_create(screen);
         lv_checkbox_set_text(show_pwd_cb, "Show password");
+        apply_body_style(show_pwd_cb);
         lv_obj_align(show_pwd_cb, LV_ALIGN_TOP_MID, 0, 110);
         lv_obj_add_event_cb(show_pwd_cb, show_password_checkbox_event, LV_EVENT_VALUE_CHANGED, NULL);
 
         // Keyboard
         lv_obj_t *kb = lv_keyboard_create(screen);
         lv_obj_set_size(kb, 320, 130);
+        lv_obj_set_style_bg_color(kb, lv_color_hex(THEME_BG_SECONDARY), 0);
         lv_obj_align(kb, LV_ALIGN_BOTTOM_MID, 0, 0);
         lv_keyboard_set_textarea(kb, password_ta);
 
         // Connect button
         lv_obj_t *connect_btn = lv_btn_create(screen);
         lv_obj_set_size(connect_btn, 100, 35);
-        lv_obj_align(connect_btn, LV_ALIGN_BOTTOM_LEFT, 10, -140);
+        apply_button_style(connect_btn);
+        lv_obj_align(connect_btn, LV_ALIGN_BOTTOM_LEFT, PADDING_NORMAL, -140);
         lv_obj_add_event_cb(connect_btn, connect_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *connect_label = lv_label_create(connect_btn);
         lv_label_set_text(connect_label, "Connect");
+        apply_button_label_style(connect_label);
         lv_obj_center(connect_label);
 
         // Cancel button
         lv_obj_t *cancel_btn = lv_btn_create(screen);
         lv_obj_set_size(cancel_btn, 100, 35);
-        lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_RIGHT, -10, -140);
+        apply_button_style(cancel_btn);
+        lv_obj_align(cancel_btn, LV_ALIGN_BOTTOM_RIGHT, -PADDING_NORMAL, -140);
         lv_obj_add_event_cb(cancel_btn, cancel_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *cancel_label = lv_label_create(cancel_btn);
         lv_label_set_text(cancel_label, "Cancel");
+        apply_button_label_style(cancel_label);
         lv_obj_center(cancel_label);
     }
 
     // Back button for open networks
     lv_obj_t *back_btn = lv_btn_create(screen);
     lv_obj_set_size(back_btn, 100, 35);
-    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+    apply_button_style(back_btn);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -PADDING_NORMAL);
     lv_obj_add_event_cb(back_btn, cancel_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *back_label = lv_label_create(back_btn);
     lv_label_set_text(back_label, "Back");
+    apply_button_label_style(back_label);
     lv_obj_center(back_label);
 
     return screen;
 }
 
 // Create connecting screen
-lv_obj_t* create_connecting_screen(ui_context_t *ctx) 
+lv_obj_t* create_connecting_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
 
     // Title
     lv_obj_t *title = lv_label_create(screen);
@@ -365,34 +507,45 @@ lv_obj_t* create_connecting_screen(ui_context_t *ctx)
                        ? ctx->config.ssid
                        : ctx->selected_ssid;
     lv_label_set_text_fmt(title, "Connecting to:\n%s", ssid);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 30);
+    apply_title_style(title);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_LARGE);
 
     // Spinner
     lv_obj_t *spinner = lv_spinner_create(screen);
     lv_obj_set_size(spinner, 80, 80);
     lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(THEME_TEXT_PRIMARY), LV_PART_INDICATOR);
 
     // Status label
     status_label = lv_label_create(screen);
     lv_label_set_text(status_label, "Please wait...");
+    apply_status_style(status_label);
+    lv_obj_set_style_text_align(status_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(status_label, LV_ALIGN_BOTTOM_MID, 0, -50);
 
     return screen;
 }
 
 // Create error screen
-lv_obj_t* create_error_screen(ui_context_t *ctx) 
+lv_obj_t* create_error_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
 
     // Title
     lv_obj_t *title = lv_label_create(screen);
     lv_label_set_text(title, "Connection Failed");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 20);
+    apply_title_style(title);
+    lv_obj_set_style_text_color(title, lv_color_hex(THEME_ACCENT_ERROR), 0); // Red for error
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_LARGE);
 
     // Error message
     lv_obj_t *error_msg = lv_label_create(screen);
     lv_label_set_text(error_msg, get_error_message(ctx->last_error));
+    apply_body_style(error_msg);
+    lv_obj_set_style_text_align(error_msg, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(error_msg, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(error_msg, 280);
     lv_obj_align(error_msg, LV_ALIGN_CENTER, 0, -30);
@@ -400,21 +553,25 @@ lv_obj_t* create_error_screen(ui_context_t *ctx)
     // Retry button
     lv_obj_t *retry_btn = lv_btn_create(screen);
     lv_obj_set_size(retry_btn, 130, 40);
+    apply_button_style(retry_btn);
     lv_obj_align(retry_btn, LV_ALIGN_CENTER, 0, 40);
     lv_obj_add_event_cb(retry_btn, retry_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *retry_label = lv_label_create(retry_btn);
     lv_label_set_text(retry_label, "Try Again");
+    apply_button_label_style(retry_label);
     lv_obj_center(retry_label);
 
     // Choose different network button
     lv_obj_t *different_btn = lv_btn_create(screen);
     lv_obj_set_size(different_btn, 200, 40);
+    apply_button_style(different_btn);
     lv_obj_align(different_btn, LV_ALIGN_CENTER, 0, 90);
     lv_obj_add_event_cb(different_btn, choose_different_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *different_label = lv_label_create(different_btn);
     lv_label_set_text(different_label, "Choose Different Network");
+    apply_button_label_style(different_label);
     lv_obj_center(different_label);
 
     return screen;
@@ -439,69 +596,82 @@ static void time_update_timer_cb(lv_timer_t *timer)
 }
 
 // Create main app screen (original UI with settings button added)
-lv_obj_t* create_main_app_screen(ui_context_t *ctx) 
+lv_obj_t* create_main_app_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
 
     // Title with version info
     lv_obj_t *title = lv_label_create(screen);
     lv_label_set_text_fmt(title, "%s", VERSION_STRING);
+    apply_title_style(title);
     lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 5);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_SMALL);
 
     // WiFi status indicator
     lv_obj_t *wifi_status = lv_label_create(screen);
     bool is_connected = wifi_is_connected();
 
-    if (is_connected) 
+    if (is_connected)
     {
         lv_label_set_text_fmt(wifi_status, "WiFi: %s", ctx->config.ssid);
-    } 
-    else 
+        apply_body_style(wifi_status);
+        lv_obj_set_style_text_color(wifi_status, lv_color_hex(THEME_ACCENT_SUCCESS), 0); // Green when connected
+    }
+    else
     {
         lv_label_set_text(wifi_status, "WiFi: Disconnected");
+        apply_status_style(wifi_status); // Gray when disconnected
     }
-    lv_obj_align(wifi_status, LV_ALIGN_TOP_LEFT, 5, 25);
+    lv_obj_align(wifi_status, LV_ALIGN_TOP_LEFT, PADDING_SMALL, 25);
 
     // WiFi Settings button
     lv_obj_t *settings_btn = lv_btn_create(screen);
     lv_obj_set_size(settings_btn, 50, 30);
+    apply_button_style(settings_btn);
     lv_obj_align(settings_btn, LV_ALIGN_TOP_RIGHT, -60, 20);
     lv_obj_add_event_cb(settings_btn, settings_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *settings_label = lv_label_create(settings_btn);
     lv_label_set_text(settings_label, "WiFi");
+    apply_button_label_style(settings_label);
     lv_obj_center(settings_label);
 
     // BLE button
     lv_obj_t *ble_btn = lv_btn_create(screen);
     lv_obj_set_size(ble_btn, 50, 30);
-    lv_obj_align(ble_btn, LV_ALIGN_TOP_RIGHT, -5, 20);
+    apply_button_style(ble_btn);
+    lv_obj_align(ble_btn, LV_ALIGN_TOP_RIGHT, -PADDING_SMALL, 20);
     lv_obj_add_event_cb(ble_btn, ble_menu_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *ble_label = lv_label_create(ble_btn);
     lv_label_set_text(ble_label, "BLE");
+    apply_button_label_style(ble_label);
     lv_obj_center(ble_label);
 
     // Applications list label
     lv_obj_t *apps_label = lv_label_create(screen);
     lv_label_set_text(apps_label, "Applications:");
-    lv_obj_align(apps_label, LV_ALIGN_TOP_LEFT, 10, 60);
+    apply_body_style(apps_label);
+    lv_obj_align(apps_label, LV_ALIGN_TOP_LEFT, PADDING_NORMAL, 60);
 
     // News Feed button
     lv_obj_t *news_btn = lv_btn_create(screen);
     lv_obj_set_size(news_btn, 300, 50);
+    apply_button_style(news_btn);
     lv_obj_align(news_btn, LV_ALIGN_TOP_MID, 0, 90);
     lv_obj_add_event_cb(news_btn, news_feed_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *news_label = lv_label_create(news_btn);
     lv_label_set_text(news_label, "News Feed");
+    apply_button_label_style(news_label);
     lv_obj_center(news_label);
 
     // Time display in bottom-right corner
     time_label = lv_label_create(screen);
     lv_label_set_text(time_label, "--:--:--");
-    lv_obj_align(time_label, LV_ALIGN_BOTTOM_RIGHT, -5, -5);
+    apply_status_style(time_label);
+    lv_obj_align(time_label, LV_ALIGN_BOTTOM_RIGHT, -PADDING_SMALL, -PADDING_SMALL);
 
     // Start time update timer (update every 1 second)
     if (time_update_timer != NULL) {
@@ -690,19 +860,85 @@ static void choose_different_btn_event(lv_event_t *e)
 }
 
 // Event handler: Settings button
-static void settings_btn_event(lv_event_t *e) 
+static void settings_btn_event(lv_event_t *e)
 {
     ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
 
     // Create settings modal using basic message box
     lv_obj_t *mbox = lv_msgbox_create(NULL);
-    lv_msgbox_add_title(mbox, "WiFi Settings");
-    lv_msgbox_add_text(mbox, "Reconfigure WiFi network?");
 
-    // Add buttons
-    lv_msgbox_add_close_button(mbox);
+    // Style the message box with modern dark theme
+    lv_obj_set_style_bg_color(mbox, lv_color_hex(THEME_BG_TERTIARY), 0);
+    lv_obj_set_style_bg_opa(mbox, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(mbox, lv_color_hex(THEME_BORDER_LIGHT), 0);
+    lv_obj_set_style_border_width(mbox, 2, 0);
+    lv_obj_set_style_radius(mbox, 6, 0);
+
+    lv_obj_t *title = lv_msgbox_add_title(mbox, "WiFi Settings");
+    if (title != NULL) {
+        lv_obj_set_style_text_font(title, FONT_TITLE, 0);
+        lv_obj_set_style_text_color(title, lv_color_hex(THEME_TEXT_PRIMARY), 0);
+    }
+
+    // Style the header (title container) AFTER adding title
+    lv_obj_t *header = lv_msgbox_get_header(mbox);
+    if (header != NULL) {
+        lv_obj_set_style_bg_color(header, lv_color_hex(THEME_BG_TERTIARY), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(header, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(header, PADDING_SMALL, 0);
+        lv_obj_set_style_border_width(header, 0, LV_PART_MAIN);
+        lv_obj_set_style_border_color(header, lv_color_hex(THEME_BG_TERTIARY), LV_PART_MAIN);
+        lv_obj_set_style_outline_width(header, 0, 0);
+    }
+
+    // Add and style close button
+    lv_obj_t *close_btn = lv_msgbox_add_close_button(mbox);
+    if (close_btn != NULL) {
+        apply_button_style(close_btn);
+        // Style the X label inside the close button
+        lv_obj_t *close_label = lv_obj_get_child(close_btn, 0);
+        if (close_label != NULL) {
+            lv_obj_set_style_text_color(close_label, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+        }
+    }
+
+    // Style the content area
+    lv_obj_t *content = lv_msgbox_get_content(mbox);
+    if (content != NULL) {
+        lv_obj_set_style_bg_color(content, lv_color_hex(THEME_BG_TERTIARY), 0);
+    }
+
+    lv_obj_t *text = lv_msgbox_add_text(mbox, "Reconfigure WiFi network?");
+    if (text != NULL) {
+        lv_obj_set_style_text_font(text, FONT_BODY, 0);
+        lv_obj_set_style_text_color(text, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+    }
+
+    // Add footer buttons
     lv_obj_t *btn_recfg = lv_msgbox_add_footer_button(mbox, "Reconfigure");
     lv_obj_t *btn_cancel = lv_msgbox_add_footer_button(mbox, "Cancel");
+
+    // Style the footer area
+    lv_obj_t *footer = lv_msgbox_get_footer(mbox);
+    if (footer != NULL) {
+        lv_obj_set_style_bg_color(footer, lv_color_hex(THEME_BG_TERTIARY), 0);
+    }
+
+    // Style the footer buttons
+    if (btn_recfg != NULL) {
+        apply_button_style(btn_recfg);
+        lv_obj_t *label = lv_obj_get_child(btn_recfg, 0);
+        if (label != NULL) {
+            apply_button_label_style(label);
+        }
+    }
+    if (btn_cancel != NULL) {
+        apply_button_style(btn_cancel);
+        lv_obj_t *label = lv_obj_get_child(btn_cancel, 0);
+        if (label != NULL) {
+            apply_button_label_style(label);
+        }
+    }
 
     lv_obj_add_event_cb(btn_recfg, forget_network_event, LV_EVENT_CLICKED, ctx);
     lv_obj_add_event_cb(btn_cancel, forget_network_event, LV_EVENT_CLICKED, NULL);
@@ -779,11 +1015,13 @@ static void skip_btn_event(lv_event_t *e)
 lv_obj_t* create_ble_scan_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
 
     // Title
     lv_obj_t *title = lv_label_create(screen);
     lv_label_set_text(title, "Select BLE Device");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
+    apply_title_style(title);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_NORMAL);
 
     // Scanning status
     lv_obj_t *scan_label = lv_label_create(screen);
@@ -792,46 +1030,55 @@ lv_obj_t* create_ble_scan_screen(ui_context_t *ctx)
     {
         // Scanning with no devices found yet
         lv_label_set_text(scan_label, "Scanning for BLE devices...");
+        apply_body_style(scan_label);
         lv_obj_align(scan_label, LV_ALIGN_CENTER, 0, -30);
 
         // Spinner
         lv_obj_t *spinner = lv_spinner_create(screen);
         lv_obj_set_size(spinner, 60, 60);
         lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 20);
+        lv_obj_set_style_arc_color(spinner, lv_color_hex(THEME_TEXT_PRIMARY), LV_PART_INDICATOR);
 
         // Back button
         lv_obj_t *back_btn = lv_btn_create(screen);
         lv_obj_set_size(back_btn, 120, 35);
-        lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        apply_button_style(back_btn);
+        lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -PADDING_NORMAL);
         lv_obj_add_event_cb(back_btn, ble_back_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *back_label = lv_label_create(back_btn);
         lv_label_set_text(back_label, "Back");
+        apply_button_label_style(back_label);
         lv_obj_center(back_label);
     }
     else if (ctx->ble_scan_state.count == 0)
     {
         lv_label_set_text(scan_label, "No BLE devices found");
+        apply_body_style(scan_label);
         lv_obj_align(scan_label, LV_ALIGN_CENTER, 0, -40);
 
         // Rescan button
         lv_obj_t *rescan_btn = lv_btn_create(screen);
         lv_obj_set_size(rescan_btn, 150, 40);
+        apply_button_style(rescan_btn);
         lv_obj_align(rescan_btn, LV_ALIGN_CENTER, 0, 10);
         lv_obj_add_event_cb(rescan_btn, ble_rescan_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *btn_label = lv_label_create(rescan_btn);
         lv_label_set_text(btn_label, "Scan Again");
+        apply_button_label_style(btn_label);
         lv_obj_center(btn_label);
 
         // Back button
         lv_obj_t *back_btn = lv_btn_create(screen);
         lv_obj_set_size(back_btn, 120, 35);
-        lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        apply_button_style(back_btn);
+        lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -PADDING_NORMAL);
         lv_obj_add_event_cb(back_btn, ble_back_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *back_label = lv_label_create(back_btn);
         lv_label_set_text(back_label, "Back");
+        apply_button_label_style(back_label);
         lv_obj_center(back_label);
     }
     else
@@ -847,11 +1094,13 @@ lv_obj_t* create_ble_scan_screen(ui_context_t *ctx)
         {
             lv_label_set_text(scan_label, "Select a device:");
         }
+        apply_body_style(scan_label);
         lv_obj_align(scan_label, LV_ALIGN_TOP_MID, 0, 40);
 
         // Create dropdown with device list
         lv_obj_t *dropdown = lv_dropdown_create(screen);
         lv_obj_set_width(dropdown, 280);
+        apply_dropdown_style(dropdown);
         lv_obj_align(dropdown, LV_ALIGN_TOP_MID, 0, 70);
 
         // Build device list string
@@ -883,32 +1132,38 @@ lv_obj_t* create_ble_scan_screen(ui_context_t *ctx)
         // Connect button
         lv_obj_t *connect_btn = lv_btn_create(screen);
         lv_obj_set_size(connect_btn, 120, 40);
+        apply_button_style(connect_btn);
         lv_obj_align(connect_btn, LV_ALIGN_CENTER, -65, 50);
         lv_obj_set_user_data(connect_btn, dropdown);
         lv_obj_add_event_cb(connect_btn, ble_connect_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *connect_label = lv_label_create(connect_btn);
         lv_label_set_text(connect_label, "Connect");
+        apply_button_label_style(connect_label);
         lv_obj_center(connect_label);
 
         // Rescan button
         lv_obj_t *rescan_btn = lv_btn_create(screen);
         lv_obj_set_size(rescan_btn, 120, 40);
+        apply_button_style(rescan_btn);
         lv_obj_align(rescan_btn, LV_ALIGN_CENTER, 65, 50);
         lv_obj_add_event_cb(rescan_btn, ble_rescan_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *rescan_label = lv_label_create(rescan_btn);
         lv_label_set_text(rescan_label, "Rescan");
+        apply_button_label_style(rescan_label);
         lv_obj_center(rescan_label);
 
         // Back button
         lv_obj_t *back_btn = lv_btn_create(screen);
         lv_obj_set_size(back_btn, 120, 35);
-        lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -10);
+        apply_button_style(back_btn);
+        lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 0, -PADDING_NORMAL);
         lv_obj_add_event_cb(back_btn, ble_back_btn_event, LV_EVENT_CLICKED, ctx);
 
         lv_obj_t *back_label = lv_label_create(back_btn);
         lv_label_set_text(back_label, "Back");
+        apply_button_label_style(back_label);
         lv_obj_center(back_label);
     }
 
@@ -919,14 +1174,18 @@ lv_obj_t* create_ble_scan_screen(ui_context_t *ctx)
 lv_obj_t* create_ble_connecting_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
 
     lv_obj_t *label = lv_label_create(screen);
     lv_label_set_text_fmt(label, "Connecting to\n%s", ctx->selected_ble_name);
+    apply_title_style(label);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(label, LV_ALIGN_CENTER, 0, -30);
 
     lv_obj_t *spinner = lv_spinner_create(screen);
     lv_obj_set_size(spinner, 60, 60);
     lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 20);
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(THEME_TEXT_PRIMARY), LV_PART_INDICATOR);
 
     return screen;
 }
@@ -935,11 +1194,13 @@ lv_obj_t* create_ble_connecting_screen(ui_context_t *ctx)
 lv_obj_t* create_sps_data_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
 
     // Title with device name
     lv_obj_t *title = lv_label_create(screen);
     lv_label_set_text_fmt(title, "SPS: %s", ctx->selected_ble_name);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 5);
+    apply_title_style(title);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_SMALL);
 
     // Connection info
     lv_obj_t *info_label = lv_label_create(screen);
@@ -948,15 +1209,19 @@ lv_obj_t* create_sps_data_screen(ui_context_t *ctx)
     lv_label_set_text_fmt(info_label, "%s (%s)",
                           ble_sps_type_to_string(ctx->selected_sps_type),
                           addr_str);
+    lv_obj_set_style_text_font(info_label, FONT_SMALL, 0); // Use small font for details
+    lv_obj_set_style_text_color(info_label, lv_color_hex(THEME_TEXT_TERTIARY), 0);
     lv_obj_align(info_label, LV_ALIGN_TOP_MID, 0, 25);
 
     // RX data (received from device) - read-only text area
     lv_obj_t *rx_label = lv_label_create(screen);
     lv_label_set_text(rx_label, "Received:");
-    lv_obj_align(rx_label, LV_ALIGN_TOP_LEFT, 10, 50);
+    apply_body_style(rx_label);
+    lv_obj_align(rx_label, LV_ALIGN_TOP_LEFT, PADDING_NORMAL, 50);
 
     sps_rx_textarea = lv_textarea_create(screen);
     lv_obj_set_size(sps_rx_textarea, 300, 80);
+    apply_textarea_style(sps_rx_textarea);
     lv_obj_align(sps_rx_textarea, LV_ALIGN_TOP_MID, 0, 70);
     lv_textarea_set_text(sps_rx_textarea, "");
     lv_textarea_set_placeholder_text(sps_rx_textarea, "Waiting for data...");
@@ -965,11 +1230,13 @@ lv_obj_t* create_sps_data_screen(ui_context_t *ctx)
     // TX data (send to device) - editable text area
     lv_obj_t *tx_label = lv_label_create(screen);
     lv_label_set_text(tx_label, "Send:");
-    lv_obj_align(tx_label, LV_ALIGN_TOP_LEFT, 10, 160);
+    apply_body_style(tx_label);
+    lv_obj_align(tx_label, LV_ALIGN_TOP_LEFT, PADDING_NORMAL, 160);
 
     sps_tx_textarea = lv_textarea_create(screen);
     lv_obj_set_size(sps_tx_textarea, 220, 60);
-    lv_obj_align(sps_tx_textarea, LV_ALIGN_TOP_LEFT, 10, 180);
+    apply_textarea_style(sps_tx_textarea);
+    lv_obj_align(sps_tx_textarea, LV_ALIGN_TOP_LEFT, PADDING_NORMAL, 180);
     lv_textarea_set_text(sps_tx_textarea, "");
     lv_textarea_set_placeholder_text(sps_tx_textarea, "Enter data...");
     lv_textarea_set_one_line(sps_tx_textarea, false);
@@ -979,31 +1246,37 @@ lv_obj_t* create_sps_data_screen(ui_context_t *ctx)
     // Send button
     lv_obj_t *send_btn = lv_btn_create(screen);
     lv_obj_set_size(send_btn, 70, 60);
-    lv_obj_align(send_btn, LV_ALIGN_TOP_RIGHT, -10, 180);
+    apply_button_style(send_btn);
+    lv_obj_align(send_btn, LV_ALIGN_TOP_RIGHT, -PADDING_NORMAL, 180);
     lv_obj_add_event_cb(send_btn, ble_send_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *send_label = lv_label_create(send_btn);
     lv_label_set_text(send_label, "Send");
+    apply_button_label_style(send_label);
     lv_obj_center(send_label);
 
     // Disconnect button
     lv_obj_t *disconnect_btn = lv_btn_create(screen);
     lv_obj_set_size(disconnect_btn, 130, 35);
-    lv_obj_align(disconnect_btn, LV_ALIGN_BOTTOM_MID, -65, -10);
+    apply_button_style(disconnect_btn);
+    lv_obj_align(disconnect_btn, LV_ALIGN_BOTTOM_MID, -65, -PADDING_NORMAL);
     lv_obj_add_event_cb(disconnect_btn, ble_disconnect_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *disc_label = lv_label_create(disconnect_btn);
     lv_label_set_text(disc_label, "Disconnect");
+    apply_button_label_style(disc_label);
     lv_obj_center(disc_label);
 
     // Back to Main button
     lv_obj_t *back_btn = lv_btn_create(screen);
     lv_obj_set_size(back_btn, 130, 35);
-    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 65, -10);
+    apply_button_style(back_btn);
+    lv_obj_align(back_btn, LV_ALIGN_BOTTOM_MID, 65, -PADDING_NORMAL);
     lv_obj_add_event_cb(back_btn, ble_back_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *back_label = lv_label_create(back_btn);
     lv_label_set_text(back_label, "Main Menu");
+    apply_button_label_style(back_label);
     lv_obj_center(back_label);
 
     return screen;
@@ -1214,6 +1487,28 @@ static void news_popup_close_event(lv_event_t *e)
 }
 
 // Event handler: News article clicked
+// Event handler to change label text color when button is focused/unfocused
+static void news_item_focus_event(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *btn = lv_event_get_target(e);
+
+    // Find the label child - iterate through all children
+    uint32_t child_count = lv_obj_get_child_count(btn);
+    for (uint32_t i = 0; i < child_count; i++) {
+        lv_obj_t *child = lv_obj_get_child(btn, i);
+        if (child && lv_obj_check_type(child, &lv_label_class)) {
+            if (code == LV_EVENT_FOCUSED) {
+                // Button is focused - set label text to black
+                lv_obj_set_style_text_color(child, lv_color_hex(0x000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+            } else if (code == LV_EVENT_DEFOCUSED) {
+                // Button lost focus - restore orange text
+                lv_obj_set_style_text_color(child, lv_color_hex(THEME_TEXT_SECONDARY), LV_PART_MAIN | LV_STATE_DEFAULT);
+            }
+        }
+    }
+}
+
 static void news_article_clicked_event(lv_event_t *e)
 {
     // Get the article index from user data
@@ -1231,11 +1526,31 @@ static void news_article_clicked_event(lv_event_t *e)
     // Create message box to show article details
     lv_obj_t *mbox = lv_msgbox_create(NULL);
 
+    // Style the message box with modern dark theme
+    lv_obj_set_width(mbox, 300);
+    lv_obj_set_height(mbox, 200);
+    lv_obj_set_style_bg_color(mbox, lv_color_hex(THEME_BG_TERTIARY), 0);
+    lv_obj_set_style_bg_opa(mbox, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(mbox, lv_color_hex(THEME_BORDER_LIGHT), 0);
+    lv_obj_set_style_border_width(mbox, 2, 0);
+    lv_obj_set_style_radius(mbox, 6, 0);
+
     // Set title (source)
     if (strlen(article->source) > 0) {
         lv_msgbox_add_title(mbox, article->source);
     } else {
         lv_msgbox_add_title(mbox, "News Article");
+    }
+
+    // Style the header
+    lv_obj_t *header = lv_msgbox_get_header(mbox);
+    if (header != NULL) {
+        lv_obj_set_style_bg_color(header, lv_color_hex(THEME_BG_TERTIARY), 0);
+        lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
+        lv_obj_set_style_text_color(header, lv_color_hex(THEME_TEXT_PRIMARY), 0);
+        lv_obj_set_style_text_font(header, FONT_TITLE, 0);
+        lv_obj_set_style_pad_all(header, PADDING_NORMAL, 0);
+        lv_obj_set_style_border_width(header, 0, 0);
     }
 
     // Build content text with title and description
@@ -1250,15 +1565,10 @@ static void news_article_clicked_event(lv_event_t *e)
 
     lv_obj_t *text_obj = lv_msgbox_add_text(mbox, content);
 
-    // Style the message box
-    lv_obj_set_width(mbox, 300);
-    lv_obj_set_height(mbox, 200);
-    lv_obj_set_style_bg_color(mbox, lv_color_hex(0x2d2d2d), 0);
-
     // Style the text content
     if (text_obj != NULL) {
-        lv_obj_set_style_text_font(text_obj, &lv_font_montserrat_10, 0);
-        lv_obj_set_style_text_color(text_obj, lv_color_hex(0xdddddd), 0);
+        lv_obj_set_style_text_font(text_obj, FONT_SMALL, 0);
+        lv_obj_set_style_text_color(text_obj, lv_color_hex(THEME_TEXT_SECONDARY), 0);
         lv_label_set_long_mode(text_obj, LV_LABEL_LONG_WRAP);
     }
 
@@ -1266,12 +1576,15 @@ static void news_article_clicked_event(lv_event_t *e)
     lv_obj_t *content_area = lv_msgbox_get_content(mbox);
     if (content_area != NULL) {
         lv_obj_set_height(content_area, 140);
-        lv_obj_set_style_pad_all(content_area, 5, 0);
+        lv_obj_set_style_pad_all(content_area, PADDING_SMALL, 0);
+        lv_obj_set_style_bg_color(content_area, lv_color_hex(THEME_BG_TERTIARY), 0);
     }
 
     // Add close button with custom event handler to restore focus
     lv_obj_t *close_btn = lv_msgbox_add_close_button(mbox);
     if (close_btn != NULL) {
+        lv_obj_set_style_text_color(close_btn, lv_color_hex(THEME_TEXT_PRIMARY), 0);
+        lv_obj_set_style_text_font(close_btn, FONT_TITLE, 0);
         lv_obj_add_event_cb(close_btn, news_popup_close_event, LV_EVENT_CLICKED, clicked_btn);
     }
 
@@ -1313,14 +1626,21 @@ static void news_update_timer_cb(lv_timer_t *timer)
             // Create a button for each news item
             lv_obj_t *btn = lv_list_add_button(news_list, NULL, "");
             lv_obj_set_style_pad_ver(btn, 4, 0);
-            lv_obj_set_style_bg_color(btn, lv_color_hex(0x2d2d2d), 0);
+            lv_obj_set_style_bg_color(btn, lv_color_hex(THEME_BG_TERTIARY), 0);
             lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
             lv_obj_set_style_radius(btn, 4, 0);
             lv_obj_set_style_border_width(btn, 1, 0);
-            lv_obj_set_style_border_color(btn, lv_color_hex(0x4a4a4a), 0);
+            lv_obj_set_style_border_color(btn, lv_color_hex(THEME_BORDER_LIGHT), 0);
 
-            // Add click event handler with article index
+            // Style focused state - orange background (text color handled by event)
+            lv_obj_set_style_bg_color(btn, lv_color_hex(THEME_TEXT_PRIMARY), LV_STATE_FOCUS_KEY);
+            lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_FOCUS_KEY);
+            lv_obj_set_style_border_color(btn, lv_color_hex(THEME_TEXT_PRIMARY), LV_STATE_FOCUS_KEY);
+
+            // Add event handlers
             lv_obj_add_event_cb(btn, news_article_clicked_event, LV_EVENT_CLICKED, &news_article_indices[i]);
+            lv_obj_add_event_cb(btn, news_item_focus_event, LV_EVENT_FOCUSED, NULL);
+            lv_obj_add_event_cb(btn, news_item_focus_event, LV_EVENT_DEFOCUSED, NULL);
 
             // Create label for the news item
             lv_obj_t *label = lv_label_create(btn);
@@ -1339,8 +1659,8 @@ static void news_update_timer_cb(lv_timer_t *timer)
             lv_label_set_text(label, item_text);
             lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
             lv_obj_set_width(label, 270);
-            lv_obj_set_style_text_font(label, &lv_font_montserrat_12, 0);
-            lv_obj_set_style_text_color(label, lv_color_hex(0xdddddd), 0);
+            lv_obj_set_style_text_font(label, FONT_BODY, 0);
+            lv_obj_set_style_text_color(label, lv_color_hex(THEME_TEXT_SECONDARY), 0);
             lv_obj_set_style_pad_all(label, 2, 0);
         }
 
@@ -1355,7 +1675,7 @@ static void news_update_timer_cb(lv_timer_t *timer)
     } else if (news_data->state == NEWS_STATE_ERROR && news_status_label != NULL) {
         // Show error message
         lv_label_set_text(news_status_label, news_data->error_message);
-        lv_obj_set_style_text_font(news_status_label, &lv_font_montserrat_12, 0);
+        lv_obj_set_style_text_font(news_status_label, FONT_BODY, 0);
 
         // Stop the timer
         if (news_update_timer != NULL) {
@@ -1371,45 +1691,49 @@ static void news_update_timer_cb(lv_timer_t *timer)
 lv_obj_t* create_news_feed_screen(ui_context_t *ctx)
 {
     lv_obj_t *screen = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen, lv_color_hex(0x1a1a1a), 0);
+    apply_screen_style(screen);
 
     // Title
     lv_obj_t *title = lv_label_create(screen);
     lv_label_set_text(title, "News Feed");
+    apply_title_style(title);
     lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(title, lv_color_hex(0xffffff), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 5);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_SMALL);
 
     // Back button
     lv_obj_t *back_btn = lv_btn_create(screen);
     lv_obj_set_size(back_btn, 60, 30);
-    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, 5, 5);
-    lv_obj_set_style_bg_color(back_btn, lv_color_hex(0x3d3d3d), 0);
-    lv_obj_set_style_radius(back_btn, 5, 0);
+    apply_button_style(back_btn);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, PADDING_SMALL, PADDING_SMALL);
     lv_obj_add_event_cb(back_btn, news_back_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *back_label = lv_label_create(back_btn);
     lv_label_set_text(back_label, "Back");
-    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_12, 0);
+    apply_button_label_style(back_label);
     lv_obj_center(back_label);
 
     // Status label for loading/error messages
     news_status_label = lv_label_create(screen);
     lv_obj_set_style_text_align(news_status_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(news_status_label, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(news_status_label, lv_color_hex(0xaaaaaa), 0);
+    apply_status_style(news_status_label);
     lv_obj_align(news_status_label, LV_ALIGN_CENTER, 0, -50);
 
     // List for news articles
     news_list = lv_list_create(screen);
     lv_obj_set_size(news_list, 300, 220);
-    lv_obj_align(news_list, LV_ALIGN_BOTTOM_MID, 0, -10);
-    lv_obj_set_style_bg_color(news_list, lv_color_hex(0x242424), 0);
+    lv_obj_align(news_list, LV_ALIGN_BOTTOM_MID, 0, -PADDING_NORMAL);
+    lv_obj_set_style_bg_color(news_list, lv_color_hex(THEME_BG_SECONDARY), 0);
     lv_obj_set_style_border_width(news_list, 2, 0);
-    lv_obj_set_style_border_color(news_list, lv_color_hex(0x3d3d3d), 0);
+    lv_obj_set_style_border_color(news_list, lv_color_hex(THEME_BORDER_NORMAL), 0);
     lv_obj_set_style_radius(news_list, 6, 0);
-    lv_obj_set_style_pad_all(news_list, 5, 0);
+
+    // Style the scrollbar - orange
+    lv_obj_set_style_bg_color(news_list, lv_color_hex(THEME_TEXT_PRIMARY), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(news_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(news_list, 8, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(news_list, 4, LV_PART_SCROLLBAR);
+
+    lv_obj_set_style_pad_all(news_list, PADDING_SMALL, 0);
 
     // Add widgets to keyboard navigation group for arrow key scrolling
     // The back button is added first, then the news list is added and focused
@@ -1435,14 +1759,14 @@ lv_obj_t* create_news_feed_screen(ui_context_t *ctx)
                          "newsapi.org");
         lv_obj_t *placeholder = lv_label_create(news_list);
         lv_label_set_text(placeholder, "API key not configured");
-        lv_obj_set_style_text_font(placeholder, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(placeholder, lv_color_hex(0x888888), 0);
+        lv_obj_set_style_text_font(placeholder, FONT_BODY, 0);
+        lv_obj_set_style_text_color(placeholder, lv_color_hex(THEME_TEXT_DISABLED), 0);
     } else {
         lv_label_set_text(news_status_label, "Loading news...");
         lv_obj_t *placeholder = lv_label_create(news_list);
         lv_label_set_text(placeholder, "Fetching latest headlines...");
-        lv_obj_set_style_text_font(placeholder, &lv_font_montserrat_12, 0);
-        lv_obj_set_style_text_color(placeholder, lv_color_hex(0x888888), 0);
+        lv_obj_set_style_text_font(placeholder, FONT_BODY, 0);
+        lv_obj_set_style_text_color(placeholder, lv_color_hex(THEME_TEXT_DISABLED), 0);
 
         // Start fetching news (country code: us = United States)
         news_api_fetch_headlines(api_key, "us");

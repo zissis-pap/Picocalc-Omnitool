@@ -212,12 +212,53 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
   - Automatic focus management - returns to selected article after closing popup
   - News list auto-focused when entering News Feed screen
 
+#### UI Modernization
+- **Modern Dark Theme with Orange Accents**: Complete visual redesign across all screens
+  - **Color Palette**: Dark backgrounds (0x1a1a1a primary) with orange text hierarchy
+    - Bright orange (0xffa726) for titles and emphasis
+    - Orange (0xff9800) for body text
+    - Soft orange (0xff8a65) for secondary/status text
+    - Muted orange (0xcc7a52) for disabled/placeholder text
+  - **Typography**: Montserrat font family with proper size hierarchy
+    - 14px for titles and headers
+    - 12px for body text and buttons (minimum readable size)
+    - 10px for small details only
+  - **Visual Refinements**:
+    - Consistent 5px border radius on all buttons
+    - Consistent 4px border radius on inputs, textareas, and dropdowns
+    - Improved spacing with 5px/10px/20px padding constants
+    - Subtle borders (0x4a4a4a) for better element separation
+    - Dark themed dropdowns with styled opened lists
+    - Fully themed message boxes and dialogs
+  - **Applied to all 10 screens**: Splash, WiFi Scan, Password Entry, Connecting, Error, Main App, BLE Scan, BLE Connecting, SPS Data, and News Feed
+
+- **Enhanced WiFi Settings Dialog**: Reconfiguration dialog matches modern theme
+  - Dark background with orange text
+  - Consistent button styling and spacing
+  - Orange close button (X) instead of default blue
+
 #### UI Changes
-- **Real-time clock display** in bottom-right corner of main screen
-- **Keyboard-navigable News Feed**: Arrow key scrolling and focus indicators
-- **Improved News Article Display**: Full descriptions now shown without truncation
+- **Real-time clock display** in bottom-right corner of main screen (orange text)
+- **Keyboard-navigable News Feed**: Arrow key scrolling with orange focus indicators
+- **Improved News Article Display**: Full descriptions shown with orange text on dark background
+- **Success/Error States**: Green (0x4caf50) for success, Red (0xf44336) for errors (semantic colors preserved)
 
 #### Technical Additions
+- **UI Styling System** (`ui_screens.c`):
+  - Centralized theme constants for colors, fonts, and spacing
+  - 8 helper functions for consistent component styling:
+    - `apply_screen_style()` - Screen backgrounds
+    - `apply_title_style()` - Title labels
+    - `apply_body_style()` - Body text labels
+    - `apply_status_style()` - Status/info labels
+    - `apply_button_style()` - Button backgrounds
+    - `apply_button_label_style()` - Button text
+    - `apply_textarea_style()` - Text input areas
+    - `apply_dropdown_style()` - Dropdown menus (both closed and opened states)
+  - Font hierarchy using Montserrat 10/12/14px
+  - Orange color palette with 3-tier text hierarchy
+  - Consistent border radius and spacing across all UI elements
+
 - **NTP Client** (`ntp_client.c/h`):
   - NTP protocol implementation using UDP
   - Software time tracking with `time_us_64()` microsecond timer
