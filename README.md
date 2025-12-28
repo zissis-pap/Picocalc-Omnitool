@@ -40,12 +40,18 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
   - Complete article descriptions with proper JSON parsing
   - Maintains focus position when closing article popups
   - **News Ticker**: Scrolling news headlines displayed next to clock on main screen
+- **Telegram Messaging**: Real-time messaging via Telegram Bot API
+  - Send and receive messages through Telegram bot
+  - Physical keyboard input with Enter key to send
+  - Automatic message polling every 5 seconds
+  - Compact UI design with message list and text input
+  - Full keyboard navigation support
 - **Real-Time Clock**: UTC time display in bottom-right corner (auto-synced via NTP)
 - **WiFi Setup Flow**: Guided network selection and password entry
 - **BLE Scan Screen**: Dynamic device discovery with real-time updates
 - **SPS Data Screen**: Send/receive interface for Serial Port Service communication
 - **Keyboard Navigation**: Full keyboard support with arrow keys, ENTER, TAB, and ESC
-- **On-Screen Keyboard**: LVGL keyboard for password input
+- **On-Screen Keyboard**: LVGL keyboard for password input (WiFi only)
 - **Status Indicators**: Real-time WiFi and BLE connection status display
 - **Error Handling**: User-friendly error messages and retry options
 - **Dual Access**: Quick access buttons for both WiFi and BLE from main menu
@@ -55,7 +61,8 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 - **Optimized Rendering**: 160-row buffer reduces screen updates from 32 to 2 chunks
 - **High-Speed SPI**: 50 MHz SPI interface for maximum throughput
 - **NTP Time Sync**: Software-based time tracking using Pico's microsecond timer
-- **HTTP/UDP Networking**: NewsAPI client (TCP/HTTP) and NTP client (UDP) via lwIP
+- **HTTP/HTTPS Networking**: NewsAPI client (TCP/HTTP), Telegram Bot API (HTTPS), and NTP client (UDP) via lwIP
+- **TLS/SSL Support**: Secure HTTPS connections for Telegram Bot API using altcp_tls
 - **Flash Persistence**: CRC32-validated configuration storage in flash
 - **State Machine**: Robust application state management
 - **Duplicate Removal**: Intelligent WiFi scan result deduplication
@@ -72,6 +79,7 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 │   ├── wifi_config.c                # WiFi management and flash persistence
 │   ├── ble_config.c                 # BLE connectivity and SPS support
 │   ├── news_api.c                   # NewsAPI HTTP client for fetching headlines
+│   ├── telegram_api.c               # Telegram Bot API HTTPS client for messaging
 │   ├── ntp_client.c                 # NTP client for time synchronization
 │   ├── lv_port_disp_picocalc_ILI9488.c  # DMA-accelerated display driver for ILI9488
 │   └── lv_port_indev_picocalc_kb.c  # I2C keyboard input driver
@@ -80,8 +88,9 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 │   ├── wifi_config.h
 │   ├── ble_config.h
 │   ├── news_api.h
+│   ├── telegram_api.h
 │   ├── ntp_client.h
-│   ├── api_tokens.h.template        # Template for API keys (copy to api_tokens.h)
+│   ├── api_tokens.h.template        # Template for API keys and bot tokens
 │   ├── lv_port_disp_picocalc_ILI9488.h
 │   └── lv_port_indev_picocalc_kb.h
 ├── lcdspi/                          # LCD SPI communication library (DMA support)
@@ -94,26 +103,46 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 
 ## Configuration
 
-### NewsAPI Setup (Required for News Feed)
+### API Keys Setup
 
-The News Feed feature requires a free API key from NewsAPI:
+The application uses `include/api_tokens.h` for storing API keys and bot tokens. This file is git-ignored to prevent accidentally committing your credentials.
 
-1. Visit [newsapi.org](https://newsapi.org) and sign up for a free account
-2. Copy your API key from the dashboard
-3. If `include/api_tokens.h` doesn't exist, copy it from the template:
+1. If `include/api_tokens.h` doesn't exist, copy it from the template:
    ```bash
    cp include/api_tokens.h.template include/api_tokens.h
    ```
-4. Edit `include/api_tokens.h` and replace `YOUR_API_KEY_HERE` with your actual API key:
+
+2. Edit `include/api_tokens.h` and configure the services you want to use:
+
+#### NewsAPI Setup (Required for News Feed)
+
+1. Visit [newsapi.org](https://newsapi.org) and sign up for a free account
+2. Copy your API key from the dashboard
+3. Edit `include/api_tokens.h` and replace `YOUR_API_KEY_HERE`:
    ```c
    #define NEWSAPI_KEY "your_actual_api_key_here"
    ```
-5. Rebuild the project
 
-**Note**:
-- The `api_tokens.h` file is git-ignored to prevent accidentally committing your API keys
-- The free tier allows 100 requests per day, which is sufficient for testing and personal use
-- You can add other API keys to this file as needed
+**Note**: The free tier allows 100 requests per day, which is sufficient for testing and personal use.
+
+#### Telegram Bot Setup (Required for Telegram Messaging)
+
+1. Open Telegram and search for [@BotFather](https://t.me/botfather)
+2. Send `/newbot` and follow the instructions to create a new bot
+3. Copy the bot token provided by BotFather
+4. Get your Chat ID:
+   - Send a message to your bot
+   - Visit `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
+   - Find the `"chat":{"id":` value in the JSON response
+5. Edit `include/api_tokens.h` and add your credentials:
+   ```c
+   #define TELEGRAM_BOT_TOKEN "your_bot_token_here"
+   #define TELEGRAM_CHAT_ID "your_chat_id_here"
+   ```
+
+**Note**: The bot token allows your device to send/receive messages. Keep it secure.
+
+6. Rebuild the project after making changes
 
 ## Build Instructions
 ```bash
@@ -195,16 +224,104 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 
 ## Changelog
 
-### Version 0.01.0 - Current Development (2025-12-27)
+### Version 0.02.1 - Telegram UI Refinements (2025-12-28)
+
+#### UI Improvements
+- **Optimized Telegram Screen Layout**: Refined message display and input areas
+  - Reduced message list height from 220px to 180px for better screen fit
+  - Reduced input textarea height from 60px to 50px
+  - Repositioned widgets to prevent overflow on 480px displays
+  - All widgets now fit properly without overlapping
+
+- **Improved Input Experience**: Enhanced physical keyboard integration
+  - Removed on-screen keyboard for cleaner interface
+  - Removed send button in favor of Enter key functionality
+  - Added `LV_EVENT_KEY` handler with Enter key detection
+  - Updated placeholder text: "Type message and press Enter..."
+  - Messages send immediately when pressing Enter on physical keyboard
+
+#### Technical Improvements
+- **Event Handler Enhancement** (`ui_screens.c`):
+  - Added `telegram_input_key_event()` function for proper key press detection
+  - Intercepts `LV_KEY_ENTER` and triggers message send
+  - Maintains multi-line support while enabling Enter-to-send
+  - Removed keyboard navigation reference to non-existent send button
+
+---
+
+### Version 0.02.0 - Telegram Messaging Integration (2025-12-28)
+
+#### New Features
+- **Telegram Bot Integration**: Real-time messaging through Telegram Bot API
+  - Send and receive messages via HTTPS to Telegram servers
+  - Message polling system with 5-second update intervals
+  - Displays up to 10 most recent messages with username attribution
+  - Message format: "@username: message text" or plain text if no username
+  - Connection status indicators (Connecting, Sending, Receiving, Connected, Error)
+  - Automatic bot token validation with user-friendly error messages
+
+#### UI Additions
+- **Telegram Screen** (`ui_screens.c`):
+  - Message list (300x220px) with scrollbar for viewing conversation history
+  - Multi-line text input area (300x60px) for composing messages
+  - On-screen keyboard for text input
+  - Back button to return to main app
+  - Send button to transmit messages
+  - Status label showing connection state
+  - Full keyboard navigation support (TAB, arrow keys)
+  - Modern dark theme with orange accents matching app design
+
+- **Main Menu Addition**: Telegram button added to application launcher
+
+#### Technical Implementation
+- **Telegram API Client** (`telegram_api.c/h`):
+  - HTTPS client using lwIP altcp_tls for secure communication
+  - Non-blocking async architecture with state machine
+  - DNS resolution for api.telegram.org
+  - TLS/SSL connection establishment with certificate validation
+  - JSON response parsing for getUpdates and sendMessage endpoints
+  - Message history management (stores last 10 messages)
+  - Polling system with update_id tracking to prevent duplicates
+  - Error handling with descriptive error messages
+  - Support for messages up to 512 characters
+  - Username extraction (up to 32 characters)
+
+- **State Machine Integration**:
+  - Added `APP_STATE_TELEGRAM` to application states
+  - Telegram update timer for automatic message polling
+  - Global widget references for UI updates
+  - Proper cleanup on state transitions
+
+- **Configuration**:
+  - Bot token and chat ID configuration via `api_tokens.h`
+  - Template file includes placeholder values with instructions
+
+#### Dependencies
+- **lwIP altcp_tls**: Secure HTTPS connections
+- **mbedTLS**: TLS/SSL encryption (via Pico SDK)
+- **JSON Parser**: Custom lightweight parser for Telegram API responses
+
+---
+
+### Version 0.01.1 - News Ticker Enhancement (2025-12-28)
 
 #### New Features
 - **Scrolling News Ticker on Main Screen**: Latest news headline scrolls next to the clock
-  - Displays first article title from news feed after visiting News Feed
+  - Displays first article title from news feed
   - Circular scrolling mode for seamless looping
   - Positioned in bottom-left corner next to time display
   - 190px width to leave space for clock
   - Automatically updates when returning from News Feed
   - Uses same orange theme styling as other UI elements
+
+---
+
+### Version 0.01.0 - UI Rework (2025-12-27)
+
+#### UI Changes
+- Complete UI rework and modernization
+- Improved screen layouts and styling consistency
+- Enhanced user experience across all screens
 
 ---
 
