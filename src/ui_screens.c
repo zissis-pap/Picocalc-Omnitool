@@ -31,6 +31,7 @@ static void news_article_clicked_event(lv_event_t *e);
 static void telegram_btn_event(lv_event_t *e);
 static void telegram_back_btn_event(lv_event_t *e);
 static void telegram_send_btn_event(lv_event_t *e);
+static void telegram_input_key_event(lv_event_t *e);
 
 // Global UI context pointer for event handlers
 static ui_context_t *g_ui_ctx = NULL;
@@ -1886,6 +1887,18 @@ static void telegram_send_btn_event(lv_event_t *e)
     }
 }
 
+// Event handler: Telegram input textarea key press
+static void telegram_input_key_event(lv_event_t *e)
+{
+    uint32_t key = lv_event_get_key(e);
+
+    // Check if Enter key was pressed
+    if (key == LV_KEY_ENTER) {
+        // Call the send function
+        telegram_send_btn_event(e);
+    }
+}
+
 // Timer callback: Update telegram message list
 static void telegram_update_timer_cb(lv_timer_t *timer)
 {
@@ -1973,18 +1986,6 @@ lv_obj_t* create_telegram_screen(ui_context_t *ctx)
     apply_button_label_style(back_label);
     lv_obj_center(back_label);
 
-    // Send button
-    lv_obj_t *send_btn = lv_btn_create(screen);
-    lv_obj_set_size(send_btn, 60, 30);
-    apply_button_style(send_btn);
-    lv_obj_align(send_btn, LV_ALIGN_TOP_RIGHT, -PADDING_SMALL, PADDING_SMALL);
-    lv_obj_add_event_cb(send_btn, telegram_send_btn_event, LV_EVENT_CLICKED, ctx);
-
-    lv_obj_t *send_label = lv_label_create(send_btn);
-    lv_label_set_text(send_label, "Send");
-    apply_button_label_style(send_label);
-    lv_obj_center(send_label);
-
     // Status label
     telegram_status_label = lv_label_create(screen);
     lv_obj_set_style_text_align(telegram_status_label, LV_TEXT_ALIGN_CENTER, 0);
@@ -1994,7 +1995,7 @@ lv_obj_t* create_telegram_screen(ui_context_t *ctx)
 
     // Message list
     telegram_list = lv_list_create(screen);
-    lv_obj_set_size(telegram_list, 300, 220);
+    lv_obj_set_size(telegram_list, 300, 180);
     lv_obj_align(telegram_list, LV_ALIGN_TOP_MID, 0, 65);
     lv_obj_set_style_bg_color(telegram_list, lv_color_hex(THEME_BG_SECONDARY), 0);
     lv_obj_set_style_border_width(telegram_list, 2, 0);
@@ -2011,25 +2012,21 @@ lv_obj_t* create_telegram_screen(ui_context_t *ctx)
 
     // Message input textarea
     telegram_input_ta = lv_textarea_create(screen);
-    lv_obj_set_size(telegram_input_ta, 300, 60);
+    lv_obj_set_size(telegram_input_ta, 300, 50);
     apply_textarea_style(telegram_input_ta);
-    lv_obj_align(telegram_input_ta, LV_ALIGN_TOP_MID, 0, 295);
+    lv_obj_align(telegram_input_ta, LV_ALIGN_TOP_MID, 0, 255);
     lv_textarea_set_text(telegram_input_ta, "");
-    lv_textarea_set_placeholder_text(telegram_input_ta, "Type message...");
+    lv_textarea_set_placeholder_text(telegram_input_ta, "Type message and press Enter...");
     lv_textarea_set_one_line(telegram_input_ta, false);  // Multi-line
     lv_textarea_set_max_length(telegram_input_ta, TELEGRAM_MESSAGE_TEXT_MAX);
 
-    // On-screen keyboard
-    lv_obj_t *kb = lv_keyboard_create(screen);
-    lv_obj_set_size(kb, 320, 115);
-    lv_obj_align(kb, LV_ALIGN_BOTTOM_MID, 0, 0);
-    lv_keyboard_set_textarea(kb, telegram_input_ta);
+    // Add event handler for Enter key to send message
+    lv_obj_add_event_cb(telegram_input_ta, telegram_input_key_event, LV_EVENT_KEY, ctx);
 
     // Add widgets to keyboard navigation group
     lv_group_t *group = lv_group_get_default();
     if (group != NULL) {
         lv_group_add_obj(group, back_btn);
-        lv_group_add_obj(group, send_btn);
         lv_group_add_obj(group, telegram_list);
         lv_group_add_obj(group, telegram_input_ta);
         lv_group_focus_obj(telegram_input_ta);  // Focus input by default
