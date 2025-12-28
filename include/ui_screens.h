@@ -21,7 +21,8 @@ typedef enum {
     APP_STATE_BLE_CONNECTED,
     APP_STATE_BLE_ERROR,
     APP_STATE_SPS_DATA,
-    APP_STATE_NEWS_FEED
+    APP_STATE_NEWS_FEED,
+    APP_STATE_TELEGRAM
 } app_state_t;
 
 // Error types
@@ -83,6 +84,7 @@ lv_obj_t* create_ble_scan_screen(ui_context_t *ctx);
 lv_obj_t* create_ble_connecting_screen(ui_context_t *ctx);
 lv_obj_t* create_sps_data_screen(ui_context_t *ctx);
 lv_obj_t* create_news_feed_screen(ui_context_t *ctx);
+lv_obj_t* create_telegram_screen(ui_context_t *ctx);
 
 // UI update functions
 void update_connection_status(ui_context_t *ctx, const char *status);

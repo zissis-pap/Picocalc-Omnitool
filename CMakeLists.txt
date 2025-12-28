@@ -67,6 +67,7 @@ add_executable(picocalc_omnitool
     src/ble_config.c
     src/ui_screens.c
     src/news_api.c
+    src/telegram_api.c
     src/ntp_client.c
     src/lv_port_indev_picocalc_kb.c
     src/lv_port_disp_picocalc_ILI9488.c
@@ -107,6 +108,8 @@ target_link_libraries(picocalc_omnitool
   lvgl_demos
   pico_cyw43_arch_lwip_threadsafe_background
   pico_btstack_ble
+  pico_lwip_mbedtls # mbedTLS support for lwIP (HTTPS/TLS)
+  pico_mbedtls      # mbedTLS crypto library
 )
 
 pico_enable_stdio_usb(picocalc_omnitool 0)

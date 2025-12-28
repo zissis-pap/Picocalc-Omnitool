@@ -1,6 +1,7 @@
 #include "ui_screens.h"
 #include "version.h"
 #include "news_api.h"
+#include "telegram_api.h"
 #include "ntp_client.h"
 #include "api_tokens.h"
 #include <stdio.h>
@@ -27,6 +28,9 @@ static void ble_back_btn_event(lv_event_t *e);
 static void news_feed_btn_event(lv_event_t *e);
 static void news_back_btn_event(lv_event_t *e);
 static void news_article_clicked_event(lv_event_t *e);
+static void telegram_btn_event(lv_event_t *e);
+static void telegram_back_btn_event(lv_event_t *e);
+static void telegram_send_btn_event(lv_event_t *e);
 
 // Global UI context pointer for event handlers
 static ui_context_t *g_ui_ctx = NULL;
@@ -44,6 +48,10 @@ static lv_timer_t *time_update_timer = NULL; // Timer for updating time display
 static uint8_t news_article_indices[MAX_NEWS_ARTICLES]; // Store article indices for click handlers
 static lv_obj_t *news_article_buttons[MAX_NEWS_ARTICLES]; // Store button references for focus restoration
 static lv_obj_t *news_ticker_label = NULL;  // For displaying scrolling news title on main screen
+static lv_obj_t *telegram_list = NULL;     // For displaying telegram messages
+static lv_obj_t *telegram_input_ta = NULL; // For message input
+static lv_obj_t *telegram_status_label = NULL; // For telegram status messages
+static lv_timer_t *telegram_update_timer = NULL; // Timer for polling updates
 
 // ============================================================================
 // MODERN THEME STYLING SYSTEM
@@ -162,6 +170,10 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
         lv_timer_del(news_update_timer);
         news_update_timer = NULL;
     }
+    if (telegram_update_timer != NULL) {
+        lv_timer_del(telegram_update_timer);
+        telegram_update_timer = NULL;
+    }
 
     // Clear global widget references
     password_ta = NULL;
@@ -172,6 +184,9 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
     news_status_label = NULL;
     time_label = NULL;
     news_ticker_label = NULL;
+    telegram_list = NULL;
+    telegram_input_ta = NULL;
+    telegram_status_label = NULL;
     memset(news_article_buttons, 0, sizeof(news_article_buttons));
 
     // Delete old screen
@@ -215,6 +230,9 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
             break;
         case APP_STATE_NEWS_FEED:
             ctx->current_screen = create_news_feed_screen(ctx);
+            break;
+        case APP_STATE_TELEGRAM:
+            ctx->current_screen = create_telegram_screen(ctx);
             break;
         default:
             return;
@@ -668,6 +686,18 @@ lv_obj_t* create_main_app_screen(ui_context_t *ctx)
     lv_label_set_text(news_label, "News Feed");
     apply_button_label_style(news_label);
     lv_obj_center(news_label);
+
+    // Telegram button
+    lv_obj_t *telegram_btn = lv_btn_create(screen);
+    lv_obj_set_size(telegram_btn, 300, 50);
+    apply_button_style(telegram_btn);
+    lv_obj_align(telegram_btn, LV_ALIGN_TOP_MID, 0, 150);
+    lv_obj_add_event_cb(telegram_btn, telegram_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *telegram_label = lv_label_create(telegram_btn);
+    lv_label_set_text(telegram_label, "Telegram");
+    apply_button_label_style(telegram_label);
+    lv_obj_center(telegram_label);
 
     // Time display in bottom-right corner
     time_label = lv_label_create(screen);
@@ -1795,6 +1825,243 @@ lv_obj_t* create_news_feed_screen(ui_context_t *ctx)
             lv_timer_del(news_update_timer);
         }
         news_update_timer = lv_timer_create(news_update_timer_cb, 500, NULL);
+    }
+
+    return screen;
+}
+
+// =============================================================================
+// TELEGRAM MESSAGING SCREEN
+// =============================================================================
+
+// Event handler: Telegram button (main screen)
+static void telegram_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    printf("Opening Telegram\n");
+    transition_to_state(ctx, APP_STATE_TELEGRAM);
+}
+
+// Event handler: Telegram back button
+static void telegram_back_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    printf("Returning to main app from Telegram\n");
+
+    // Stop polling
+    telegram_data_t *data = telegram_api_get_data();
+    if (data != NULL) {
+        data->polling_active = false;
+    }
+
+    transition_to_state(ctx, APP_STATE_MAIN_APP);
+}
+
+// Event handler: Telegram send button
+static void telegram_send_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+
+    if (telegram_input_ta == NULL) return;
+
+    const char *text = lv_textarea_get_text(telegram_input_ta);
+    if (text == NULL || strlen(text) == 0) {
+        printf("Empty message, not sending\n");
+        return;
+    }
+
+    printf("Sending message: %s\n", text);
+
+    // Send message via Telegram API (HTTPS)
+    telegram_send_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, text);
+
+    // Clear input
+    lv_textarea_set_text(telegram_input_ta, "");
+
+    // Show sending status
+    if (telegram_status_label != NULL) {
+        lv_label_set_text(telegram_status_label, "Sending...");
+    }
+}
+
+// Timer callback: Update telegram message list
+static void telegram_update_timer_cb(lv_timer_t *timer)
+{
+    telegram_data_t *data = telegram_api_get_data();
+
+    if (data == NULL || telegram_list == NULL) {
+        return;
+    }
+
+    // Check if we need to update the UI
+    if (data->state == TELEGRAM_STATE_SUCCESS && data->message_count > 0) {
+        // Update message list
+        lv_obj_clean(telegram_list);
+
+        for (uint8_t i = 0; i < data->message_count; i++) {
+            telegram_message_t *msg = &data->messages[i];
+
+            lv_obj_t *btn = lv_list_add_button(telegram_list, NULL, "");
+            lv_obj_set_style_pad_ver(btn, 4, 0);
+
+            // Format message: "@username: message text"
+            char label_text[TELEGRAM_USERNAME_MAX + TELEGRAM_MESSAGE_TEXT_MAX + 20];
+            if (strlen(msg->username) > 0) {
+                snprintf(label_text, sizeof(label_text), "@%s: %s",
+                        msg->username, msg->text);
+            } else {
+                snprintf(label_text, sizeof(label_text), "%s", msg->text);
+            }
+
+            lv_obj_t *label = lv_label_create(btn);
+            lv_label_set_text(label, label_text);
+            lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+            lv_obj_set_width(label, 270);
+            apply_body_style(label);
+        }
+
+        // Update status
+        if (telegram_status_label != NULL) {
+            lv_label_set_text(telegram_status_label, "Connected");
+        }
+    } else if (data->state == TELEGRAM_STATE_ERROR) {
+        // Show error
+        if (telegram_status_label != NULL) {
+            lv_label_set_text(telegram_status_label, data->error_message);
+        }
+    } else if (data->state == TELEGRAM_STATE_SENDING) {
+        if (telegram_status_label != NULL) {
+            lv_label_set_text(telegram_status_label, "Sending...");
+        }
+    } else if (data->state == TELEGRAM_STATE_RECEIVING) {
+        if (telegram_status_label != NULL) {
+            lv_label_set_text(telegram_status_label, "Checking for messages...");
+        }
+    }
+
+    // Poll for new messages if active
+    if (data->polling_active && data->state != TELEGRAM_STATE_SENDING &&
+        data->state != TELEGRAM_STATE_RECEIVING) {
+        telegram_poll_updates(TELEGRAM_BOT_TOKEN);
+    }
+}
+
+// Create Telegram messaging screen
+lv_obj_t* create_telegram_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
+
+    // Title
+    lv_obj_t *title = lv_label_create(screen);
+    lv_label_set_text(title, "Telegram");
+    apply_title_style(title);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_SMALL);
+
+    // Back button
+    lv_obj_t *back_btn = lv_btn_create(screen);
+    lv_obj_set_size(back_btn, 60, 30);
+    apply_button_style(back_btn);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, PADDING_SMALL, PADDING_SMALL);
+    lv_obj_add_event_cb(back_btn, telegram_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+    apply_button_label_style(back_label);
+    lv_obj_center(back_label);
+
+    // Send button
+    lv_obj_t *send_btn = lv_btn_create(screen);
+    lv_obj_set_size(send_btn, 60, 30);
+    apply_button_style(send_btn);
+    lv_obj_align(send_btn, LV_ALIGN_TOP_RIGHT, -PADDING_SMALL, PADDING_SMALL);
+    lv_obj_add_event_cb(send_btn, telegram_send_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *send_label = lv_label_create(send_btn);
+    lv_label_set_text(send_label, "Send");
+    apply_button_label_style(send_label);
+    lv_obj_center(send_label);
+
+    // Status label
+    telegram_status_label = lv_label_create(screen);
+    lv_obj_set_style_text_align(telegram_status_label, LV_TEXT_ALIGN_CENTER, 0);
+    apply_status_style(telegram_status_label);
+    lv_obj_align(telegram_status_label, LV_ALIGN_TOP_MID, 0, 40);
+    lv_label_set_text(telegram_status_label, "Connecting...");
+
+    // Message list
+    telegram_list = lv_list_create(screen);
+    lv_obj_set_size(telegram_list, 300, 220);
+    lv_obj_align(telegram_list, LV_ALIGN_TOP_MID, 0, 65);
+    lv_obj_set_style_bg_color(telegram_list, lv_color_hex(THEME_BG_SECONDARY), 0);
+    lv_obj_set_style_border_width(telegram_list, 2, 0);
+    lv_obj_set_style_border_color(telegram_list, lv_color_hex(THEME_BORDER_NORMAL), 0);
+    lv_obj_set_style_radius(telegram_list, 6, 0);
+
+    // Style the scrollbar
+    lv_obj_set_style_bg_color(telegram_list, lv_color_hex(THEME_TEXT_PRIMARY), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(telegram_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(telegram_list, 8, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(telegram_list, 4, LV_PART_SCROLLBAR);
+
+    lv_obj_set_style_pad_all(telegram_list, PADDING_SMALL, 0);
+
+    // Message input textarea
+    telegram_input_ta = lv_textarea_create(screen);
+    lv_obj_set_size(telegram_input_ta, 300, 60);
+    apply_textarea_style(telegram_input_ta);
+    lv_obj_align(telegram_input_ta, LV_ALIGN_TOP_MID, 0, 295);
+    lv_textarea_set_text(telegram_input_ta, "");
+    lv_textarea_set_placeholder_text(telegram_input_ta, "Type message...");
+    lv_textarea_set_one_line(telegram_input_ta, false);  // Multi-line
+    lv_textarea_set_max_length(telegram_input_ta, TELEGRAM_MESSAGE_TEXT_MAX);
+
+    // On-screen keyboard
+    lv_obj_t *kb = lv_keyboard_create(screen);
+    lv_obj_set_size(kb, 320, 115);
+    lv_obj_align(kb, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_keyboard_set_textarea(kb, telegram_input_ta);
+
+    // Add widgets to keyboard navigation group
+    lv_group_t *group = lv_group_get_default();
+    if (group != NULL) {
+        lv_group_add_obj(group, back_btn);
+        lv_group_add_obj(group, send_btn);
+        lv_group_add_obj(group, telegram_list);
+        lv_group_add_obj(group, telegram_input_ta);
+        lv_group_focus_obj(telegram_input_ta);  // Focus input by default
+    }
+
+    // Initialize telegram API if not already done
+    telegram_api_init();
+
+    // Check if bot token is configured
+    const char *bot_token = TELEGRAM_BOT_TOKEN;
+    if (strcmp(bot_token, "YOUR_BOT_TOKEN_HERE") == 0) {
+        lv_label_set_text(telegram_status_label,
+                         "Please configure bot token\n"
+                         "See api_tokens.h");
+        lv_obj_t *placeholder = lv_label_create(telegram_list);
+        lv_label_set_text(placeholder, "Bot token not configured");
+        lv_obj_set_style_text_color(placeholder, lv_color_hex(THEME_TEXT_DISABLED), 0);
+    } else {
+        // Start polling for messages
+        telegram_data_t *data = telegram_api_get_data();
+        if (data != NULL) {
+            data->polling_active = true;
+        }
+
+        // Initial poll
+        telegram_poll_updates(TELEGRAM_BOT_TOKEN);
+
+        // Start update timer (check every 5 seconds)
+        if (telegram_update_timer != NULL) {
+            lv_timer_del(telegram_update_timer);
+        }
+        telegram_update_timer = lv_timer_create(telegram_update_timer_cb, 5000, NULL);
     }
 
     return screen;

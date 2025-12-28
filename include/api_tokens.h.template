@@ -16,6 +16,22 @@
 // Get your free API key at: https://newsapi.org
 #define NEWSAPI_KEY "YOUR_API_KEY_HERE"
 
+// Telegram Bot Configuration
+// Get bot token from @BotFather on Telegram: https://t.me/BotFather
+// 1. Message @BotFather and send: /newbot
+// 2. Follow instructions to create your bot
+// 3. Copy the token provided (format: 1234567890:ABCdefGHIjklMNOpqrsTUVwxyz)
+#define TELEGRAM_BOT_TOKEN "YOUR_BOT_TOKEN_HERE"
+
+// Telegram Chat ID
+// Get your chat ID by:
+// 1. Message your bot
+// 2. Visit: https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+// 3. Find "chat":{"id":123456789} in the JSON response
+#define TELEGRAM_CHAT_ID 123456789LL  // Your numeric chat ID
+
+// Note: Direct HTTPS connection to api.telegram.org is now used (no proxy needed)
+
 // Add other API tokens below as needed
 // Example:
 // #define OPENAI_API_KEY "your-openai-key-here"
