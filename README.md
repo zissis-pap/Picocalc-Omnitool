@@ -590,5 +590,3 @@ The serial monitor of **Arduino IDE** is another great choice for PicoCalc seria
 ### Version 0.00.2 and earlier
 Initial development versions with basic WiFi and LVGL functionality.
 
-## Special thanks
-[Hsuan Han Lai](https://github.com/adwuard) for initial porting and demo project for the PicoCalc 
