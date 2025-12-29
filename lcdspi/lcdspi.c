@@ -4,6 +4,8 @@
 
 #include <hardware/spi.h>
 #include "hardware/timer.h"
+#include "hardware/sync.h"
+#include "hardware/xip_cache.h"
 #include <ctype.h>
 #include <stdio.h>
 

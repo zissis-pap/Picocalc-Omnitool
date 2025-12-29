@@ -11,7 +11,9 @@
  *********************/
 #include "lv_port_disp_picocalc_ILI9488.h"
 #include <stdbool.h>
+#include <stdio.h>
 #include "lcdspi/lcdspi.h"
+#include "psram_helper.h"
 
 
 
@@ -66,9 +68,13 @@ void lv_port_disp_init(void)
     lv_display_t * disp = lv_display_create(MY_DISP_HOR_RES, MY_DISP_VER_RES);
     lv_display_set_flush_cb(disp, disp_flush);
 
-    /* One buffer for partial rendering - 160 rows for better performance on RP2350 */
+    /* Use internal SRAM for display buffer - PSRAM is too slow for real-time rendering
+     * PSRAM will be used for less time-critical large buffers (API responses, etc.) */
     LV_ATTRIBUTE_MEM_ALIGN
-    static uint8_t buf_1[MY_DISP_HOR_RES * 160 * BYTE_PER_PIXEL];          /*A buffer for 160 rows (~102 KB)*/
+    static uint8_t buf_1[MY_DISP_HOR_RES * 160 * BYTE_PER_PIXEL];  /* ~102 KB in internal SRAM */
+
+    printf("Display buffer: %zu KB in internal SRAM (for best performance)\n", sizeof(buf_1) / 1024);
+
     lv_display_set_buffers(disp, buf_1, NULL, sizeof(buf_1), LV_DISPLAY_RENDER_MODE_PARTIAL);
 }
 

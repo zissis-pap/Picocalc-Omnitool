@@ -40,6 +40,7 @@ static void weather_custom_btn_event(lv_event_t *e);
 static void weather_submit_city_event(lv_event_t *e);
 static void weather_input_key_event(lv_event_t *e);
 static void weather_refresh_btn_event(lv_event_t *e);
+static void weather_view_map_btn_event(lv_event_t *e);
 static void weather_update_timer_cb(lv_timer_t *timer);
 
 // Global UI context pointer for event handlers
@@ -264,6 +265,9 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
             break;
         case APP_STATE_WEATHER_DISPLAY:
             ctx->current_screen = create_weather_display_screen(ctx);
+            break;
+        case APP_STATE_WEATHER_MAP:
+            ctx->current_screen = create_weather_map_screen(ctx);
             break;
         default:
             return;
@@ -2463,17 +2467,168 @@ lv_obj_t* create_weather_display_screen(ui_context_t *ctx)
         lv_obj_set_style_text_color(fc_btn, lv_color_hex(THEME_TEXT_SECONDARY), 0);
     }
 
-    // Refresh button
+    // Weather map image (if loaded)
+    if (data->map_loaded && data->map_image_data != NULL && data->map_image_size > 0) {
+        printf("Displaying weather map: %d bytes\n", data->map_image_size);
+
+        lv_obj_t *map_img = lv_img_create(screen);
+
+        // Create image descriptor for binary PNG data
+        lv_img_dsc_t img_dsc;
+        img_dsc.header.w = 0;  // Auto-detect from PNG
+        img_dsc.header.h = 0;
+        img_dsc.header.cf = LV_COLOR_FORMAT_RAW;
+        img_dsc.header.stride = 0;
+        img_dsc.data_size = data->map_image_size;
+        img_dsc.data = data->map_image_data;
+
+        lv_img_set_src(map_img, &img_dsc);
+        lv_obj_align(map_img, LV_ALIGN_BOTTOM_RIGHT, -PADDING_NORMAL, -45);
+        lv_obj_set_size(map_img, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+
+        // Add border
+        lv_obj_set_style_border_width(map_img, BORDER_THIN, 0);
+        lv_obj_set_style_border_color(map_img, lv_color_hex(THEME_BORDER_NORMAL), 0);
+        lv_obj_set_style_radius(map_img, 3, 0);
+    } else {
+        printf("Map not loaded: loaded=%d, data=%p, size=%d\n",
+               data->map_loaded, data->map_image_data, data->map_image_size);
+    }
+
+    // View Map button (left)
+    lv_obj_t *map_btn = lv_btn_create(screen);
+    lv_obj_set_size(map_btn, 100, 35);
+    apply_button_style(map_btn);
+    lv_obj_align(map_btn, LV_ALIGN_BOTTOM_LEFT, PADDING_NORMAL, -PADDING_SMALL);
+    lv_obj_add_event_cb(map_btn, weather_view_map_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *map_label = lv_label_create(map_btn);
+    lv_label_set_text(map_label, "View Map");
+    apply_button_label_style(map_label);
+    lv_obj_center(map_label);
+
+    // Refresh button (right)
     lv_obj_t *refresh_btn = lv_btn_create(screen);
     lv_obj_set_size(refresh_btn, 100, 35);
     apply_button_style(refresh_btn);
-    lv_obj_align(refresh_btn, LV_ALIGN_BOTTOM_MID, 0, -PADDING_SMALL);
+    lv_obj_align(refresh_btn, LV_ALIGN_BOTTOM_RIGHT, -PADDING_NORMAL, -PADDING_SMALL);
     lv_obj_add_event_cb(refresh_btn, weather_refresh_btn_event, LV_EVENT_CLICKED, ctx);
 
     lv_obj_t *refresh_label = lv_label_create(refresh_btn);
     lv_label_set_text(refresh_label, "Refresh");
     apply_button_label_style(refresh_label);
     lv_obj_center(refresh_label);
+
+    return screen;
+}
+
+// View Map button event handler
+static void weather_view_map_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t *)lv_event_get_user_data(e);
+    
+    weather_data_t *data = weather_api_get_data();
+    if (data && data->map_loaded) {
+        printf("Opening fullscreen map view\n");
+        transition_to_state(ctx, APP_STATE_WEATHER_MAP);
+    } else {
+        printf("Map not yet loaded, fetching...\n");
+        // Trigger map fetch
+        if (data) {
+            weather_api_fetch_map("YOUR_API_KEY", data->latitude, data->longitude);
+        }
+    }
+}
+
+// Create fullscreen weather map screen
+lv_obj_t* create_weather_map_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
+
+    weather_data_t *data = weather_api_get_data();
+    if (data == NULL) {
+        lv_obj_t *error_label = lv_label_create(screen);
+        lv_label_set_text(error_label, "No weather data");
+        apply_body_style(error_label);
+        lv_obj_center(error_label);
+        return screen;
+    }
+
+    // Title
+    lv_obj_t *title = lv_label_create(screen);
+    char title_buf[128];
+    snprintf(title_buf, sizeof(title_buf), "%s - Weather Map", data->city_name);
+    lv_label_set_text(title, title_buf);
+    apply_title_style(title);
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, PADDING_SMALL, PADDING_SMALL);
+
+    // Back button
+    lv_obj_t *back_btn = lv_btn_create(screen);
+    lv_obj_set_size(back_btn, 60, 30);
+    apply_button_style(back_btn);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_RIGHT, -PADDING_SMALL, PADDING_SMALL);
+    lv_obj_add_event_cb(back_btn, weather_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+    apply_button_label_style(back_label);
+    lv_obj_center(back_label);
+
+    // Display fullscreen map
+    if (data->map_loaded && data->map_image_data != NULL && data->map_image_size > 0) {
+        printf("Displaying fullscreen weather map: %d bytes\n", data->map_image_size);
+
+        lv_obj_t *map_img = lv_img_create(screen);
+
+        // Create LVGL image descriptor for PNG data
+        static lv_img_dsc_t img_dsc;  // Static to persist
+        img_dsc.header.w = 0;  // Auto-detect from PNG
+        img_dsc.header.h = 0;
+        img_dsc.header.cf = LV_COLOR_FORMAT_RAW;
+        img_dsc.header.stride = 0;
+        img_dsc.data_size = data->map_image_size;
+        img_dsc.data = data->map_image_data;
+
+        lv_img_set_src(map_img, &img_dsc);
+        lv_obj_align(map_img, LV_ALIGN_CENTER, 0, 10);
+        
+        // Scale to fit screen if needed
+        lv_obj_set_size(map_img, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+
+        // Add border
+        lv_obj_set_style_border_width(map_img, BORDER_THIN, 0);
+        lv_obj_set_style_border_color(map_img, lv_color_hex(THEME_BORDER_NORMAL), 0);
+        lv_obj_set_style_radius(map_img, 5, 0);
+
+        // Map info label
+        lv_obj_t *info_label = lv_label_create(screen);
+        lv_label_set_text(info_label, "Temperature Map");
+        apply_body_style(info_label);
+        lv_obj_align(info_label, LV_ALIGN_BOTTOM_MID, 0, -45);
+    } else {
+        // Map not loaded - show loading message
+        lv_obj_t *loading_label = lv_label_create(screen);
+        if (weather_api_get_state() == WEATHER_STATE_FETCHING_MAP) {
+            lv_label_set_text(loading_label, "Loading map...");
+        } else {
+            lv_label_set_text(loading_label, "Map not available\nPress Fetch to download");
+        }
+        apply_body_style(loading_label);
+        lv_obj_center(loading_label);
+
+        // Fetch button
+        lv_obj_t *fetch_btn = lv_btn_create(screen);
+        lv_obj_set_size(fetch_btn, 120, 40);
+        apply_button_style(fetch_btn);
+        lv_obj_align(fetch_btn, LV_ALIGN_CENTER, 0, 50);
+        lv_obj_add_event_cb(fetch_btn, weather_view_map_btn_event, LV_EVENT_CLICKED, ctx);
+
+        lv_obj_t *fetch_label = lv_label_create(fetch_btn);
+        lv_label_set_text(fetch_label, "Fetch Map");
+        apply_button_label_style(fetch_label);
+        lv_obj_center(fetch_label);
+    }
 
     return screen;
 }

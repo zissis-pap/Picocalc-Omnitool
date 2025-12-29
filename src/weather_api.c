@@ -10,6 +10,7 @@
 #include "mbedtls/error.h"
 #include "mbedtls/debug.h"
 #include "lvgl.h"
+#include "psram_helper.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -334,6 +335,10 @@ static err_t tcp_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
             printf("TLS handshake completed\n");
             g_handshake_done = true;
 
+            // Clear response buffer - handshake data no longer needed
+            g_response_len = 0;
+            memset(g_response_buffer, 0, sizeof(g_response_buffer));
+
             // Send HTTP request now that handshake is done
             int write_ret = mbedtls_ssl_write(&g_ssl, (unsigned char *)g_request_buffer, strlen(g_request_buffer));
             if (write_ret < 0) {
@@ -351,19 +356,34 @@ static err_t tcp_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
                      "TLS handshake failed");
         }
     } else {
-        // Handshake done, read decrypted data
+        // Handshake done, read ALL available decrypted data
         char decrypt_buf[2048];
-        int read_ret = mbedtls_ssl_read(&g_ssl, (unsigned char *)decrypt_buf, sizeof(decrypt_buf) - 1);
-        if (read_ret > 0) {
-            decrypt_buf[read_ret] = '\0';
-            printf("Received %d bytes of decrypted data\n", read_ret);
+        int total_read = 0;
 
-            // Store decrypted response
-            if (g_response_len + read_ret < sizeof(g_response_buffer)) {
-                memcpy(g_response_buffer + g_response_len, decrypt_buf, read_ret);
-                g_response_len += read_ret;
-                g_response_buffer[g_response_len] = '\0';
+        // Keep reading until no more data available
+        while (1) {
+            int read_ret = mbedtls_ssl_read(&g_ssl, (unsigned char *)decrypt_buf, sizeof(decrypt_buf) - 1);
+            if (read_ret > 0) {
+                decrypt_buf[read_ret] = '\0';
+                total_read += read_ret;
+
+                // Store decrypted response
+                if (g_response_len + read_ret < sizeof(g_response_buffer)) {
+                    memcpy(g_response_buffer + g_response_len, decrypt_buf, read_ret);
+                    g_response_len += read_ret;
+                    g_response_buffer[g_response_len] = '\0';
+                }
+            } else if (read_ret == MBEDTLS_ERR_SSL_WANT_READ || read_ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+                // No more data available right now
+                break;
+            } else {
+                // Error or connection closed
+                break;
             }
+        }
+
+        if (total_read > 0) {
+            printf("Received %d bytes of decrypted data\n", total_read);
         }
     }
 
@@ -432,16 +452,17 @@ void weather_api_fetch_map(const char *api_key, float lat, float lon)
     g_weather_data.state = WEATHER_STATE_FETCHING_MAP;
     g_weather_data.current_request = WEATHER_REQUEST_MAP;
 
-    // Allocate map image buffer if not done
+    // Allocate map image buffer from PSRAM if not done
     if (g_weather_data.map_image_data == NULL) {
-        g_weather_data.map_image_data = (uint8_t *)malloc(WEATHER_MAP_IMAGE_MAX_SIZE);
+        g_weather_data.map_image_data = (uint8_t *)psram_malloc(WEATHER_MAP_IMAGE_MAX_SIZE);
         if (g_weather_data.map_image_data == NULL) {
-            printf("Failed to allocate map buffer\n");
+            printf("Failed to allocate map buffer from PSRAM\n");
             g_weather_data.state = WEATHER_STATE_ERROR;
             snprintf(g_weather_data.error_message, sizeof(g_weather_data.error_message),
-                     "Out of memory");
+                     "PSRAM allocation failed");
             return;
         }
+        printf("Map buffer allocated in PSRAM: %d KB\n", WEATHER_MAP_IMAGE_MAX_SIZE / 1024);
     }
 
     // Build HTTPS GET request for PNG map
@@ -490,6 +511,14 @@ static void parse_forecast_response(const char *response, uint32_t len)
     }
     json_start += 4;
 
+    // Debug: Print first 500 and last 500 characters of JSON
+    printf("JSON start: %.500s\n", json_start);
+
+    int json_len = strlen(json_start);
+    if (json_len > 500) {
+        printf("JSON end: ...%s\n", json_start + json_len - 500);
+    }
+
     // Check for API errors
     if (strstr(json_start, "\"cod\":\"404\"") != NULL) {
         const char *msg = strstr(json_start, "\"message\":\"");
@@ -518,15 +547,23 @@ static void parse_forecast_response(const char *response, uint32_t len)
     }
 
     // Extract city coordinates (for map request)
-    const char *coord = strstr(json_start, "\"coord\":{");
-    if (coord) {
-        const char *lat_pos = strstr(coord, "\"lat\":");
-        const char *lon_pos = strstr(coord, "\"lon\":");
-        if (lat_pos && lon_pos) {
-            g_weather_data.latitude = atof(lat_pos + 6);
-            g_weather_data.longitude = atof(lon_pos + 6);
-            printf("City coordinates: %.4f, %.4f\n", g_weather_data.latitude, g_weather_data.longitude);
+    // In forecast API, coordinates are under "city":{"coord":{...}}
+    const char *city = strstr(json_start, "\"city\":{");
+    if (city) {
+        const char *coord = strstr(city, "\"coord\":{");
+        if (coord) {
+            const char *lat_pos = strstr(coord, "\"lat\":");
+            const char *lon_pos = strstr(coord, "\"lon\":");
+            if (lat_pos && lon_pos) {
+                g_weather_data.latitude = atof(lat_pos + 6);
+                g_weather_data.longitude = atof(lon_pos + 6);
+                printf("City coordinates: %.4f, %.4f\n", g_weather_data.latitude, g_weather_data.longitude);
+            }
         }
+    }
+
+    if (g_weather_data.latitude == 0.0 && g_weather_data.longitude == 0.0) {
+        printf("Warning: Could not parse city coordinates from response\n");
     }
 
     // Parse forecast list array
@@ -597,20 +634,25 @@ static void parse_forecast_response(const char *response, uint32_t len)
 
     printf("Parsed %d forecasts\n", g_weather_data.forecast_count);
 
-    // Now fetch map with coordinates
-    if (g_weather_data.latitude != 0.0 && g_weather_data.longitude != 0.0) {
-        weather_api_fetch_map(g_api_key, g_weather_data.latitude, g_weather_data.longitude);
-    } else {
-        // Skip map if we don't have coordinates
-        g_weather_data.state = WEATHER_STATE_SUCCESS;
-        g_weather_data.map_loaded = false;
-    }
+    // Weather forecast parsed successfully
+    // Map can be fetched separately if needed
+    g_weather_data.state = WEATHER_STATE_SUCCESS;
 }
 
 // Parse map response
 static void parse_map_response(const char *response, uint32_t len)
 {
     printf("Parsing map image response (%d bytes)\n", len);
+
+    // Debug: Print HTTP response headers and beginning of body
+    const char *body_start = strstr(response, "\r\n\r\n");
+    if (body_start) {
+        int header_len = body_start - response;
+        printf("HTTP headers (%d bytes): %.400s\n", header_len, response);
+        printf("Body start (first 100 bytes): %.100s\n", body_start + 4);
+    } else {
+        printf("No HTTP headers found, raw response: %.200s\n", response);
+    }
 
     // Find PNG binary data (skip HTTP headers)
     const char *png_start = strstr(response, "\r\n\r\n");
@@ -626,6 +668,9 @@ static void parse_map_response(const char *response, uint32_t len)
     if ((unsigned char)png_start[0] != 0x89 || png_start[1] != 'P' ||
         png_start[2] != 'N' || png_start[3] != 'G') {
         printf("Not a valid PNG image\n");
+        printf("First 4 bytes: 0x%02X 0x%02X 0x%02X 0x%02X\n",
+               (unsigned char)png_start[0], (unsigned char)png_start[1],
+               (unsigned char)png_start[2], (unsigned char)png_start[3]);
         // Don't fail completely, just skip the map
         g_weather_data.map_loaded = false;
         g_weather_data.state = WEATHER_STATE_SUCCESS;
@@ -653,28 +698,33 @@ const char* weather_get_emoji(const char *icon_code)
 {
     if (!icon_code || strlen(icon_code) < 2) return "?";
 
-    // Map OpenWeather icon codes to simple text icons
+    // Map OpenWeather icon codes to visible text icons
     // 01d/01n = clear sky, 02d/02n = few clouds, 03d/03n = scattered clouds
     // 04d/04n = broken clouds, 09d/09n = shower rain, 10d/10n = rain
     // 11d/11n = thunderstorm, 13d/13n = snow, 50d/50n = mist
 
+    printf("Weather icon code: %s\n", icon_code);
+
     if (icon_code[0] == '0' && icon_code[1] == '1') {
-        return "*";  // Clear sky / sun
-    } else if (icon_code[0] == '0' && (icon_code[1] == '2' || icon_code[1] == '3' || icon_code[1] == '4')) {
-        return "o";  // Clouds
+        return "[Clear]";
+    } else if (icon_code[0] == '0' && icon_code[1] == '2') {
+        return "[P.Cloudy]";
+    } else if (icon_code[0] == '0' && (icon_code[1] == '3' || icon_code[1] == '4')) {
+        return "[Cloudy]";
     } else if (icon_code[0] == '0' && icon_code[1] == '9') {
-        return "~";  // Shower rain
+        return "[Rain]";
     } else if (icon_code[0] == '1' && icon_code[1] == '0') {
-        return "~";  // Rain
+        return "[Rain]";
     } else if (icon_code[0] == '1' && icon_code[1] == '1') {
-        return "!";  // Thunderstorm
+        return "[Storm]";
     } else if (icon_code[0] == '1' && icon_code[1] == '3') {
-        return "S";  // Snow
+        return "[Snow]";
     } else if (icon_code[0] == '5' && icon_code[1] == '0') {
-        return "F";  // Fog/Mist
+        return "[Fog]";
     }
 
-    return "?";
+    printf("Unknown weather icon: %s\n", icon_code);
+    return "[Unknown]";
 }
 
 // Get predefined cities array

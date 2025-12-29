@@ -26,7 +26,8 @@ typedef enum {
     APP_STATE_WEATHER_CITY_SELECT,
     APP_STATE_WEATHER_CUSTOM_INPUT,
     APP_STATE_WEATHER_LOADING,
-    APP_STATE_WEATHER_DISPLAY
+    APP_STATE_WEATHER_DISPLAY,
+    APP_STATE_WEATHER_MAP
 } app_state_t;
 
 // Error types
@@ -97,6 +98,7 @@ lv_obj_t* create_weather_city_select_screen(ui_context_t *ctx);
 lv_obj_t* create_weather_custom_input_screen(ui_context_t *ctx);
 lv_obj_t* create_weather_loading_screen(ui_context_t *ctx);
 lv_obj_t* create_weather_display_screen(ui_context_t *ctx);
+lv_obj_t* create_weather_map_screen(ui_context_t *ctx);
 
 // UI update functions
 void update_connection_status(ui_context_t *ctx, const char *status);

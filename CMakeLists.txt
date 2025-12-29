@@ -20,6 +20,9 @@ cmake_minimum_required(VERSION 3.16)
 # Setup board for Pico 2W
 set(PICO_BOARD pico2_w)
 
+# Enable PSRAM support (8MB QSPI PSRAM)
+set(PICO_RP2350_PSRAM 1)
+
 include(pico_sdk_import.cmake)
 
 project(Picocalc-Omnitool)
@@ -70,14 +73,15 @@ add_executable(picocalc_omnitool
     src/telegram_api.c
     src/weather_api.c
     src/ntp_client.c
+    src/psram_helper.c
     src/lv_port_indev_picocalc_kb.c
     src/lv_port_disp_picocalc_ILI9488.c
 )
 
 target_compile_options(picocalc_omnitool PRIVATE -DPICOMITE
-										-DPICO_HEAP_SIZE=0x1000
+										-DPICO_HEAP_SIZE=0x20000
 										-DGUICONTROLS
-										-DPICO_CORE0_STACK_SIZE=0x1000
+										-DPICO_CORE0_STACK_SIZE=0x4000
 										-DENABLE_BLE
 										)
 

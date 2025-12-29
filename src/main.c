@@ -20,6 +20,7 @@
 #include "ble_config.h"
 #include "ui_screens.h"
 #include "ntp_client.h"
+#include "psram_helper.h"
 
 const unsigned int LEDPIN = 25;
 
@@ -37,6 +38,11 @@ int main(void)
 {
     // Initialize standard I/O
     stdio_init_all();
+
+    // Initialize PSRAM early (before any large allocations)
+    if (!psram_init()) {
+        printf("WARNING: PSRAM initialization failed!\n");
+    }
 
     // Initialize LED
     gpio_init(LEDPIN);
