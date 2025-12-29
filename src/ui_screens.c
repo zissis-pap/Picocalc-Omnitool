@@ -2,6 +2,7 @@
 #include "version.h"
 #include "news_api.h"
 #include "telegram_api.h"
+#include "weather_api.h"
 #include "ntp_client.h"
 #include "api_tokens.h"
 #include <stdio.h>
@@ -32,6 +33,14 @@ static void telegram_btn_event(lv_event_t *e);
 static void telegram_back_btn_event(lv_event_t *e);
 static void telegram_send_btn_event(lv_event_t *e);
 static void telegram_input_key_event(lv_event_t *e);
+static void weather_btn_event(lv_event_t *e);
+static void weather_back_btn_event(lv_event_t *e);
+static void weather_city_btn_event(lv_event_t *e);
+static void weather_custom_btn_event(lv_event_t *e);
+static void weather_submit_city_event(lv_event_t *e);
+static void weather_input_key_event(lv_event_t *e);
+static void weather_refresh_btn_event(lv_event_t *e);
+static void weather_update_timer_cb(lv_timer_t *timer);
 
 // Global UI context pointer for event handlers
 static ui_context_t *g_ui_ctx = NULL;
@@ -53,6 +62,10 @@ static lv_obj_t *telegram_list = NULL;     // For displaying telegram messages
 static lv_obj_t *telegram_input_ta = NULL; // For message input
 static lv_obj_t *telegram_status_label = NULL; // For telegram status messages
 static lv_timer_t *telegram_update_timer = NULL; // Timer for polling updates
+static lv_obj_t *weather_city_input_ta = NULL; // For city name input
+static lv_obj_t *weather_loading_label = NULL; // For loading status
+static lv_obj_t *weather_detail_label = NULL;  // For loading details
+static lv_timer_t *weather_update_timer = NULL; // Timer for checking weather state
 
 // ============================================================================
 // MODERN THEME STYLING SYSTEM
@@ -234,6 +247,23 @@ void transition_to_state(ui_context_t *ctx, app_state_t new_state)
             break;
         case APP_STATE_TELEGRAM:
             ctx->current_screen = create_telegram_screen(ctx);
+            break;
+        case APP_STATE_WEATHER_CITY_SELECT:
+            ctx->current_screen = create_weather_city_select_screen(ctx);
+            break;
+        case APP_STATE_WEATHER_CUSTOM_INPUT:
+            ctx->current_screen = create_weather_custom_input_screen(ctx);
+            break;
+        case APP_STATE_WEATHER_LOADING:
+            // Clean up previous timer if exists
+            if (weather_update_timer != NULL) {
+                lv_timer_del(weather_update_timer);
+                weather_update_timer = NULL;
+            }
+            ctx->current_screen = create_weather_loading_screen(ctx);
+            break;
+        case APP_STATE_WEATHER_DISPLAY:
+            ctx->current_screen = create_weather_display_screen(ctx);
             break;
         default:
             return;
@@ -699,6 +729,18 @@ lv_obj_t* create_main_app_screen(ui_context_t *ctx)
     lv_label_set_text(telegram_label, "Telegram");
     apply_button_label_style(telegram_label);
     lv_obj_center(telegram_label);
+
+    // Weather button
+    lv_obj_t *weather_btn = lv_btn_create(screen);
+    lv_obj_set_size(weather_btn, 300, 50);
+    apply_button_style(weather_btn);
+    lv_obj_align(weather_btn, LV_ALIGN_TOP_MID, 0, 210);
+    lv_obj_add_event_cb(weather_btn, weather_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *weather_label = lv_label_create(weather_btn);
+    lv_label_set_text(weather_label, "Weather Forecast");
+    apply_button_label_style(weather_label);
+    lv_obj_center(weather_label);
 
     // Time display in bottom-right corner
     time_label = lv_label_create(screen);
@@ -2060,6 +2102,378 @@ lv_obj_t* create_telegram_screen(ui_context_t *ctx)
         }
         telegram_update_timer = lv_timer_create(telegram_update_timer_cb, 5000, NULL);
     }
+
+    return screen;
+}
+
+// ============================================================================
+// WEATHER APP EVENT HANDLERS AND SCREENS
+// ============================================================================
+
+// Weather button event (from main menu)
+static void weather_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t*)lv_event_get_user_data(e);
+    transition_to_state(ctx, APP_STATE_WEATHER_CITY_SELECT);
+}
+
+// Weather back button event
+static void weather_back_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t*)lv_event_get_user_data(e);
+    transition_to_state(ctx, APP_STATE_MAIN_APP);
+}
+
+// Weather city button event (predefined city selected)
+static void weather_city_btn_event(lv_event_t *e)
+{
+    int city_index = (int)(intptr_t)lv_event_get_user_data(e);
+    ui_context_t *ctx = g_ui_ctx;
+
+    if (ctx == NULL) return;
+
+    ctx->selected_city_index = city_index;
+
+    // Start fetching weather
+    const weather_city_t *cities = weather_get_cities();
+    weather_api_fetch_forecast(OPENWEATHER_API_KEY, cities[city_index].name);
+
+    transition_to_state(ctx, APP_STATE_WEATHER_LOADING);
+}
+
+// Weather custom city button event
+static void weather_custom_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t*)lv_event_get_user_data(e);
+    transition_to_state(ctx, APP_STATE_WEATHER_CUSTOM_INPUT);
+}
+
+// Weather submit city event (custom city entered)
+static void weather_submit_city_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t*)lv_event_get_user_data(e);
+
+    if (weather_city_input_ta == NULL) return;
+
+    const char *city = lv_textarea_get_text(weather_city_input_ta);
+    if (strlen(city) == 0) {
+        return;
+    }
+
+    strncpy(ctx->weather_custom_city, city, sizeof(ctx->weather_custom_city) - 1);
+    ctx->weather_custom_city[sizeof(ctx->weather_custom_city) - 1] = '\0';
+    ctx->selected_city_index = -1;  // Mark as custom
+
+    // Start fetching
+    weather_api_fetch_forecast(OPENWEATHER_API_KEY, city);
+    transition_to_state(ctx, APP_STATE_WEATHER_LOADING);
+}
+
+// Weather input key event (Enter key in custom city input)
+static void weather_input_key_event(lv_event_t *e)
+{
+    uint32_t key = lv_event_get_key(e);
+    if (key == LV_KEY_ENTER) {
+        weather_submit_city_event(e);
+    }
+}
+
+// Weather refresh button event
+static void weather_refresh_btn_event(lv_event_t *e)
+{
+    ui_context_t *ctx = (ui_context_t*)lv_event_get_user_data(e);
+
+    // Refetch weather for the same city
+    weather_data_t *data = weather_api_get_data();
+    if (data != NULL && strlen(data->city_name) > 0) {
+        weather_api_fetch_forecast(OPENWEATHER_API_KEY, data->city_name);
+        transition_to_state(ctx, APP_STATE_WEATHER_LOADING);
+    }
+}
+
+// Weather update timer callback (for loading screen)
+static void weather_update_timer_cb(lv_timer_t *timer)
+{
+    ui_context_t *ctx = (ui_context_t*)lv_timer_get_user_data(timer);
+    weather_data_t *data = weather_api_get_data();
+
+    if (data == NULL) return;
+
+    if (data->state == WEATHER_STATE_FETCHING_FORECAST) {
+        if (weather_detail_label != NULL) {
+            lv_label_set_text(weather_detail_label, "Fetching forecast data...");
+        }
+    } else if (data->state == WEATHER_STATE_FETCHING_MAP) {
+        if (weather_detail_label != NULL) {
+            lv_label_set_text(weather_detail_label, "Downloading map image...");
+        }
+    } else if (data->state == WEATHER_STATE_SUCCESS) {
+        // Both forecast and map loaded (or map skipped)
+        lv_timer_del(weather_update_timer);
+        weather_update_timer = NULL;
+        transition_to_state(ctx, APP_STATE_WEATHER_DISPLAY);
+    } else if (data->state == WEATHER_STATE_ERROR) {
+        lv_timer_del(weather_update_timer);
+        weather_update_timer = NULL;
+
+        // Show error
+        if (weather_loading_label != NULL) {
+            lv_label_set_text(weather_loading_label, "Error");
+        }
+        if (weather_detail_label != NULL) {
+            lv_label_set_text(weather_detail_label, data->error_message);
+        }
+    }
+}
+
+// Create weather city select screen
+lv_obj_t* create_weather_city_select_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
+
+    // Title
+    lv_obj_t *title = lv_label_create(screen);
+    lv_label_set_text(title, "Weather App");
+    apply_title_style(title);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_SMALL);
+
+    // Back button
+    lv_obj_t *back_btn = lv_btn_create(screen);
+    lv_obj_set_size(back_btn, 60, 30);
+    apply_button_style(back_btn);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_LEFT, PADDING_SMALL, PADDING_SMALL);
+    lv_obj_add_event_cb(back_btn, weather_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+    apply_button_label_style(back_label);
+    lv_obj_center(back_label);
+
+    // Select city label
+    lv_obj_t *select_label = lv_label_create(screen);
+    lv_label_set_text(select_label, "Select City:");
+    apply_body_style(select_label);
+    lv_obj_align(select_label, LV_ALIGN_TOP_LEFT, PADDING_NORMAL, 45);
+
+    // City list
+    lv_obj_t *city_list = lv_list_create(screen);
+    lv_obj_set_size(city_list, 300, 240);
+    lv_obj_align(city_list, LV_ALIGN_CENTER, 0, 10);
+    lv_obj_set_style_bg_color(city_list, lv_color_hex(THEME_BG_SECONDARY), 0);
+    lv_obj_set_style_border_width(city_list, BORDER_THIN, 0);
+    lv_obj_set_style_border_color(city_list, lv_color_hex(THEME_BORDER_NORMAL), 0);
+
+    // Add predefined cities
+    const weather_city_t *cities = weather_get_cities();
+    for (int i = 0; i < MAX_WEATHER_CITIES; i++) {
+        lv_obj_t *btn = lv_list_add_btn(city_list, NULL, cities[i].name);
+        lv_obj_set_style_text_color(btn, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+        lv_obj_add_event_cb(btn, weather_city_btn_event, LV_EVENT_CLICKED,
+                           (void*)(intptr_t)i);  // Pass city index
+    }
+
+    // Custom city button
+    lv_obj_t *custom_btn = lv_list_add_btn(city_list, NULL, "Custom City...");
+    lv_obj_set_style_text_color(custom_btn, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+    lv_obj_add_event_cb(custom_btn, weather_custom_btn_event, LV_EVENT_CLICKED, ctx);
+
+    return screen;
+}
+
+// Create weather custom input screen
+lv_obj_t* create_weather_custom_input_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
+
+    // Title
+    lv_obj_t *title = lv_label_create(screen);
+    lv_label_set_text(title, "Enter City Name");
+    apply_title_style(title);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_SMALL);
+
+    // Cancel button
+    lv_obj_t *cancel_btn = lv_btn_create(screen);
+    lv_obj_set_size(cancel_btn, 70, 30);
+    apply_button_style(cancel_btn);
+    lv_obj_align(cancel_btn, LV_ALIGN_TOP_LEFT, PADDING_SMALL, PADDING_SMALL);
+    lv_obj_add_event_cb(cancel_btn, weather_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *cancel_label = lv_label_create(cancel_btn);
+    lv_label_set_text(cancel_label, "Cancel");
+    apply_button_label_style(cancel_label);
+    lv_obj_center(cancel_label);
+
+    // Input label
+    lv_obj_t *label = lv_label_create(screen);
+    lv_label_set_text(label, "City Name:");
+    apply_body_style(label);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, -60);
+
+    // Textarea
+    weather_city_input_ta = lv_textarea_create(screen);
+    lv_obj_set_size(weather_city_input_ta, 280, 50);
+    apply_textarea_style(weather_city_input_ta);
+    lv_obj_align(weather_city_input_ta, LV_ALIGN_CENTER, 0, -10);
+    lv_textarea_set_placeholder_text(weather_city_input_ta, "e.g., Berlin");
+    lv_textarea_set_one_line(weather_city_input_ta, true);
+    lv_textarea_set_max_length(weather_city_input_ta, WEATHER_CITY_NAME_MAX);
+
+    // Submit button
+    lv_obj_t *submit_btn = lv_btn_create(screen);
+    lv_obj_set_size(submit_btn, 150, 40);
+    apply_button_style(submit_btn);
+    lv_obj_align(submit_btn, LV_ALIGN_CENTER, 0, 50);
+    lv_obj_add_event_cb(submit_btn, weather_submit_city_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *submit_label = lv_label_create(submit_btn);
+    lv_label_set_text(submit_label, "Get Weather");
+    apply_button_label_style(submit_label);
+    lv_obj_center(submit_label);
+
+    // Add Enter key handler
+    lv_obj_add_event_cb(weather_city_input_ta, weather_input_key_event,
+                       LV_EVENT_KEY, ctx);
+
+    return screen;
+}
+
+// Create weather loading screen
+lv_obj_t* create_weather_loading_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
+
+    // Title
+    lv_obj_t *title = lv_label_create(screen);
+    lv_label_set_text(title, "Weather");
+    apply_title_style(title);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, PADDING_SMALL);
+
+    // Status label
+    weather_loading_label = lv_label_create(screen);
+    lv_label_set_text(weather_loading_label, "Loading weather...");
+    apply_status_style(weather_loading_label);
+    lv_obj_align(weather_loading_label, LV_ALIGN_CENTER, 0, -40);
+
+    // Spinner
+    lv_obj_t *spinner = lv_spinner_create(screen);
+    lv_obj_set_size(spinner, 50, 50);
+    lv_obj_align(spinner, LV_ALIGN_CENTER, 0, 10);
+    lv_obj_set_style_arc_color(spinner, lv_color_hex(THEME_TEXT_PRIMARY),
+                                LV_PART_INDICATOR);
+
+    // Detail label
+    weather_detail_label = lv_label_create(screen);
+    lv_label_set_text(weather_detail_label, "Fetching forecast data...");
+    apply_body_style(weather_detail_label);
+    lv_obj_align(weather_detail_label, LV_ALIGN_CENTER, 0, 60);
+
+    // Start update timer (check API state every 500ms)
+    if (weather_update_timer != NULL) {
+        lv_timer_del(weather_update_timer);
+    }
+    weather_update_timer = lv_timer_create(weather_update_timer_cb, 500, ctx);
+
+    return screen;
+}
+
+// Create weather display screen
+lv_obj_t* create_weather_display_screen(ui_context_t *ctx)
+{
+    lv_obj_t *screen = lv_obj_create(NULL);
+    apply_screen_style(screen);
+
+    weather_data_t *data = weather_api_get_data();
+    if (data == NULL) {
+        return screen;
+    }
+
+    // Title (city name)
+    lv_obj_t *title = lv_label_create(screen);
+    lv_label_set_text(title, data->city_name);
+    apply_title_style(title);
+    lv_obj_align(title, LV_ALIGN_TOP_LEFT, PADDING_SMALL, PADDING_SMALL);
+
+    // Back button
+    lv_obj_t *back_btn = lv_btn_create(screen);
+    lv_obj_set_size(back_btn, 60, 30);
+    apply_button_style(back_btn);
+    lv_obj_align(back_btn, LV_ALIGN_TOP_RIGHT, -PADDING_SMALL, PADDING_SMALL);
+    lv_obj_add_event_cb(back_btn, weather_back_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *back_label = lv_label_create(back_btn);
+    lv_label_set_text(back_label, "Back");
+    apply_button_label_style(back_label);
+    lv_obj_center(back_label);
+
+    // Current weather (first forecast entry)
+    if (data->forecast_count > 0) {
+        weather_forecast_t *current = &data->forecasts[0];
+
+        lv_obj_t *current_label = lv_label_create(screen);
+        char temp_buf[128];
+        snprintf(temp_buf, sizeof(temp_buf), "Current: %.1f%cC %s\nFeels like: %.1f%cC",
+                 current->temp, 0xB0, weather_get_emoji(current->icon),
+                 current->feels_like, 0xB0);
+        lv_label_set_text(current_label, temp_buf);
+        apply_body_style(current_label);
+        lv_obj_align(current_label, LV_ALIGN_TOP_LEFT, PADDING_NORMAL, 40);
+    }
+
+    // Forecast list (scrollable)
+    lv_obj_t *forecast_list = lv_list_create(screen);
+    lv_obj_set_size(forecast_list, 300, 150);
+    lv_obj_align(forecast_list, LV_ALIGN_TOP_MID, 0, 85);
+    lv_obj_set_style_bg_color(forecast_list, lv_color_hex(THEME_BG_SECONDARY), 0);
+    lv_obj_set_style_border_width(forecast_list, BORDER_THIN, 0);
+    lv_obj_set_style_border_color(forecast_list, lv_color_hex(THEME_BORDER_NORMAL), 0);
+
+    // Get current time for day grouping
+    time_t now = time(NULL);
+    struct tm *now_tm = localtime(&now);
+    int today_day = now_tm->tm_mday;
+
+    bool today_header_added = false;
+    bool tomorrow_header_added = false;
+
+    for (int i = 0; i < data->forecast_count; i++) {
+        weather_forecast_t *fc = &data->forecasts[i];
+        struct tm *fc_tm = localtime(&fc->timestamp);
+
+        // Add day headers
+        if (fc_tm->tm_mday == today_day && !today_header_added) {
+            lv_obj_t *header_btn = lv_list_add_btn(forecast_list, NULL, "Today:");
+            lv_obj_set_style_text_color(header_btn, lv_color_hex(THEME_TEXT_PRIMARY), 0);
+            today_header_added = true;
+        } else if (fc_tm->tm_mday == today_day + 1 && !tomorrow_header_added) {
+            lv_obj_t *header_btn = lv_list_add_btn(forecast_list, NULL, "Tomorrow:");
+            lv_obj_set_style_text_color(header_btn, lv_color_hex(THEME_TEXT_PRIMARY), 0);
+            tomorrow_header_added = true;
+        }
+
+        // Forecast entry
+        char fc_buf[128];
+        snprintf(fc_buf, sizeof(fc_buf), "%02d:00  %.0f%cC %s  %s",
+                 fc_tm->tm_hour, fc->temp, 0xB0,
+                 weather_get_emoji(fc->icon), fc->description);
+
+        lv_obj_t *fc_btn = lv_list_add_btn(forecast_list, NULL, fc_buf);
+        lv_obj_set_style_text_color(fc_btn, lv_color_hex(THEME_TEXT_SECONDARY), 0);
+    }
+
+    // Refresh button
+    lv_obj_t *refresh_btn = lv_btn_create(screen);
+    lv_obj_set_size(refresh_btn, 100, 35);
+    apply_button_style(refresh_btn);
+    lv_obj_align(refresh_btn, LV_ALIGN_BOTTOM_MID, 0, -PADDING_SMALL);
+    lv_obj_add_event_cb(refresh_btn, weather_refresh_btn_event, LV_EVENT_CLICKED, ctx);
+
+    lv_obj_t *refresh_label = lv_label_create(refresh_btn);
+    lv_label_set_text(refresh_label, "Refresh");
+    apply_button_label_style(refresh_label);
+    lv_obj_center(refresh_label);
 
     return screen;
 }

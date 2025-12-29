@@ -22,7 +22,11 @@ typedef enum {
     APP_STATE_BLE_ERROR,
     APP_STATE_SPS_DATA,
     APP_STATE_NEWS_FEED,
-    APP_STATE_TELEGRAM
+    APP_STATE_TELEGRAM,
+    APP_STATE_WEATHER_CITY_SELECT,
+    APP_STATE_WEATHER_CUSTOM_INPUT,
+    APP_STATE_WEATHER_LOADING,
+    APP_STATE_WEATHER_DISPLAY
 } app_state_t;
 
 // Error types
@@ -64,6 +68,10 @@ typedef struct {
 
     // Common
     error_type_t last_error;
+
+    // Weather state
+    char weather_custom_city[65];
+    int selected_city_index;  // -1 = custom, 0-9 = predefined
 } ui_context_t;
 
 // Initialize UI system
@@ -85,6 +93,10 @@ lv_obj_t* create_ble_connecting_screen(ui_context_t *ctx);
 lv_obj_t* create_sps_data_screen(ui_context_t *ctx);
 lv_obj_t* create_news_feed_screen(ui_context_t *ctx);
 lv_obj_t* create_telegram_screen(ui_context_t *ctx);
+lv_obj_t* create_weather_city_select_screen(ui_context_t *ctx);
+lv_obj_t* create_weather_custom_input_screen(ui_context_t *ctx);
+lv_obj_t* create_weather_loading_screen(ui_context_t *ctx);
+lv_obj_t* create_weather_display_screen(ui_context_t *ctx);
 
 // UI update functions
 void update_connection_status(ui_context_t *ctx, const char *status);

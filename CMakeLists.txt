@@ -68,6 +68,7 @@ add_executable(picocalc_omnitool
     src/ui_screens.c
     src/news_api.c
     src/telegram_api.c
+    src/weather_api.c
     src/ntp_client.c
     src/lv_port_indev_picocalc_kb.c
     src/lv_port_disp_picocalc_ILI9488.c

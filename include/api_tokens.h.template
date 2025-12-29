@@ -32,9 +32,16 @@
 
 // Note: Direct HTTPS connection to api.telegram.org is now used (no proxy needed)
 
+// OpenWeather API Configuration
+// Get your free API key at: https://openweathermap.org/api
+// 1. Sign up for a free account at https://openweathermap.org
+// 2. Navigate to API Keys section in your account
+// 3. Copy your API key (may take a few hours to activate)
+// 4. The free tier allows 60 calls/minute and 1,000,000 calls/month
+#define OPENWEATHER_API_KEY "YOUR_API_KEY_HERE"
+
 // Add other API tokens below as needed
 // Example:
 // #define OPENAI_API_KEY "your-openai-key-here"
-// #define WEATHER_API_KEY "your-weather-key-here"
 
 #endif // API_TOKENS_H

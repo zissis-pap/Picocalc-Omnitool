@@ -46,6 +46,14 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
   - Automatic message polling every 5 seconds
   - Compact UI design with message list and text input
   - Full keyboard navigation support
+- **Weather Forecast**: Real-time weather forecasts via OpenWeather API
+  - 48-hour weather forecast (today and tomorrow)
+  - 10 predefined major cities + custom city input
+  - 3-hour interval forecasts with temperature and conditions
+  - Weather icons for different conditions (sun, clouds, rain, etc.)
+  - HTTPS connection with mbedTLS encryption
+  - Multi-screen flow: city selection → loading → forecast display
+  - Refresh button for updated forecasts
 - **Real-Time Clock**: UTC time display in bottom-right corner (auto-synced via NTP)
 - **WiFi Setup Flow**: Guided network selection and password entry
 - **BLE Scan Screen**: Dynamic device discovery with real-time updates
@@ -61,8 +69,8 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 - **Optimized Rendering**: 160-row buffer reduces screen updates from 32 to 2 chunks
 - **High-Speed SPI**: 50 MHz SPI interface for maximum throughput
 - **NTP Time Sync**: Software-based time tracking using Pico's microsecond timer
-- **HTTP/HTTPS Networking**: NewsAPI client (TCP/HTTP), Telegram Bot API (HTTPS), and NTP client (UDP) via lwIP
-- **TLS/SSL Support**: Secure HTTPS connections for Telegram Bot API using altcp_tls
+- **HTTP/HTTPS Networking**: NewsAPI client (TCP/HTTP), Telegram Bot API (HTTPS), Weather API (HTTPS), and NTP client (UDP) via lwIP
+- **TLS/SSL Support**: Secure HTTPS connections for Telegram Bot API and Weather API using mbedTLS
 - **Flash Persistence**: CRC32-validated configuration storage in flash
 - **State Machine**: Robust application state management
 - **Duplicate Removal**: Intelligent WiFi scan result deduplication
@@ -80,6 +88,7 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 │   ├── ble_config.c                 # BLE connectivity and SPS support
 │   ├── news_api.c                   # NewsAPI HTTP client for fetching headlines
 │   ├── telegram_api.c               # Telegram Bot API HTTPS client for messaging
+│   ├── weather_api.c                # OpenWeather API HTTPS client for weather forecasts
 │   ├── ntp_client.c                 # NTP client for time synchronization
 │   ├── lv_port_disp_picocalc_ILI9488.c  # DMA-accelerated display driver for ILI9488
 │   └── lv_port_indev_picocalc_kb.c  # I2C keyboard input driver
@@ -89,6 +98,7 @@ A comprehensive application for the PicoCalc that showcases LVGL graphics engine
 │   ├── ble_config.h
 │   ├── news_api.h
 │   ├── telegram_api.h
+│   ├── weather_api.h
 │   ├── ntp_client.h
 │   ├── api_tokens.h.template        # Template for API keys and bot tokens
 │   ├── lv_port_disp_picocalc_ILI9488.h
@@ -142,7 +152,23 @@ The application uses `include/api_tokens.h` for storing API keys and bot tokens.
 
 **Note**: The bot token allows your device to send/receive messages. Keep it secure.
 
-6. Rebuild the project after making changes
+#### OpenWeather API Setup (Required for Weather Forecast)
+
+1. Visit [openweathermap.org](https://openweathermap.org/api) and sign up for a free account
+2. Navigate to the "API keys" section in your account dashboard
+3. Copy your API key (it may take a few hours to activate)
+4. Edit `include/api_tokens.h` and replace `YOUR_API_KEY_HERE`:
+   ```c
+   #define OPENWEATHER_API_KEY "your_actual_api_key_here"
+   ```
+
+**Note**: The free tier allows:
+- 60 calls per minute
+- 1,000,000 calls per month
+- Access to current weather and 5-day forecast data
+- Sufficient for personal use and testing
+
+5. Rebuild the project after making changes
 
 ## Build Instructions
 ```bash
@@ -223,6 +249,103 @@ screen /dev/ttyACM0 115200
 The serial monitor of **Arduino IDE** is another great choice for PicoCalc serial output on both Linux and Windows.
 
 ## Changelog
+
+### Version 0.03.0 - Weather Forecast Integration (2025-12-29)
+
+#### New Features
+- **Weather Forecast Application**: Real-time weather forecasts via OpenWeather API
+  - 48-hour weather forecast with 3-hour intervals
+  - Support for today and tomorrow forecasts
+  - Current temperature, feels-like temperature, and humidity
+  - Weather condition descriptions and icons
+  - Multi-screen user flow for optimal UX
+
+#### UI Additions
+- **Weather City Selection Screen** (`ui_screens.c`):
+  - 10 predefined major cities (New York, London, Paris, Tokyo, Sydney, etc.)
+  - "Custom City..." option for manual city entry
+  - Scrollable city list with consistent dark theme styling
+  - Back button to return to main menu
+
+- **Weather Custom Input Screen**:
+  - Text input field with I2C keyboard support
+  - Placeholder text: "e.g., Berlin"
+  - One-line textarea with max length validation
+  - Submit button and Enter key support
+
+- **Weather Loading Screen**:
+  - Animated spinner with orange theme
+  - Dynamic status messages:
+    - "Fetching forecast data..."
+    - "Downloading map image..."
+  - Real-time state monitoring with 500ms updates
+  - Error display with descriptive messages
+
+- **Weather Display Screen**:
+  - Current weather summary at top
+  - Scrollable forecast list grouped by day ("Today:", "Tomorrow:")
+  - Weather icons: `*` (sun), `o` (clouds), `~` (rain), `!` (thunderstorm), `S` (snow), `F` (fog)
+  - Temperature in Celsius with degree symbol
+  - Refresh button for updated forecasts
+  - Back button to return to city selection
+
+- **Main Menu Addition**: "Weather Forecast" button added to application launcher
+
+#### Technical Implementation
+- **Weather API Client** (`weather_api.c/h`):
+  - HTTPS client using lwIP + mbedTLS for secure communication
+  - Non-blocking async architecture with state machine
+  - DNS resolution for api.openweathermap.org
+  - TLS/SSL connection with proper error handling
+  - OpenWeather 5 Day/3 Hour Forecast API integration
+  - JSON response parsing for forecast data
+  - Support for up to 16 forecast entries (48 hours)
+  - Temperature, humidity, weather description extraction
+  - Coordinate parsing for future map integration
+  - Custom lightweight JSON parser (no external dependencies)
+  - Memory management with on-demand allocation
+  - Weather icon mapping to simple text symbols
+
+- **State Machine Integration**:
+  - Added 4 new app states:
+    - `APP_STATE_WEATHER_CITY_SELECT` - City selection
+    - `APP_STATE_WEATHER_CUSTOM_INPUT` - Custom city input
+    - `APP_STATE_WEATHER_LOADING` - Loading/fetching data
+    - `APP_STATE_WEATHER_DISPLAY` - Forecast display
+  - Weather update timer for loading screen state monitoring
+  - Global widget references for UI updates
+  - Proper cleanup on state transitions
+
+- **Configuration**:
+  - API key configuration via `api_tokens.h`
+  - Template file updated with OpenWeather setup instructions
+  - Support for 10 predefined cities with coordinates
+
+- **Data Structures**:
+  - `weather_forecast_t`: Individual forecast entry (timestamp, temp, humidity, description, icon)
+  - `weather_data_t`: Complete weather data (city, coordinates, forecast array, state, errors)
+  - `weather_city_t`: Predefined city with name and coordinates
+
+#### Dependencies
+- **lwIP**: TCP/IP networking stack
+- **mbedTLS**: TLS/SSL encryption for HTTPS
+- **OpenWeather API**: 5 Day/3 Hour Forecast endpoint
+- **JSON Parser**: Custom lightweight parser for API responses
+
+#### Build System
+- Added `src/weather_api.c` to CMakeLists.txt
+- Added `include/weather_api.h` header
+- Integrated with existing mbedTLS and lwIP libraries
+
+#### API Compatibility Fixes
+- Updated for LVGL v9.x API:
+  - `lv_spinner_create()` simplified signature
+  - `lv_timer_get_user_data()` for timer user data access
+  - Manual list styling (replaced unavailable helper functions)
+- Added `<math.h>` for coordinate calculations
+- Defined `M_PI` constant for portability
+
+---
 
 ### Version 0.02.1 - Telegram UI Refinements (2025-12-28)
 
